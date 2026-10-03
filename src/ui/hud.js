@@ -91,9 +91,13 @@ export class Hud {
     else if (kind === 'transfer') { html = `${icon('crown')}${esc(t('toast.transfer', { name: data.name }))}`; cls = 'gold'; }
     else if (kind === 'shield') { html = `${icon('shield')}${esc(t('toast.shield'))}`; cls = 'good'; }
     else if (kind === 'speed') { html = `${icon('bolt')}${esc(t('toast.speed'))}`; cls = 'gold'; }
+    else if (kind === 'streak') { html = `${icon('bolt')}${esc(t(`feed.streak${Math.min(4, data.n)}`, { n: data.coins }))}`; cls = 'gold big'; }
+    else if (kind === 'kingKill') { html = `${icon('crown')}${esc(t('feed.kingKill', { name: data.name, n: data.coins }))}`; cls = 'gold big'; }
+    else if (kind === 'kingMe') { html = `${icon('crown')}${esc(t('feed.kingMe'))}`; cls = 'gold'; }
+    else if (kind === 'record') { html = `${icon('trophy')}${esc(t('feed.record'))}`; cls = 'good big'; }
     else if (kind === 'revived') { html = `${icon('refresh')}${esc(t('toast.revived'))}`; cls = 'good'; }
     else html = esc(data.text || '');
-    const el = h(`div.feed-item${cls ? `.${cls}` : ''}`, { html });
+    const el = h(`div.feed-item${cls ? `.${cls.split(' ').join('.')}` : ''}`, { html });
     this.feedEl.append(el);
     while (this.feedEl.children.length > 3) this.feedEl.firstChild.remove();
     setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 360); }, 2400);

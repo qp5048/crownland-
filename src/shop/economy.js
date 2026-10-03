@@ -5,17 +5,18 @@ import { BOOSTS, getItem } from '../cosmetics/catalog.js';
  * Coins for a finished match. Pure function — the same numbers are shown in
  * the results screen breakdown and credited to the save.
  */
-export function computeMatchCoins({ share, kills, seconds, won = false, ranked = false, magnet = false }) {
+export function computeMatchCoins({ share, kills, seconds, won = false, ranked = false, magnet = false, bonus = 0 }) {
   const territory = Math.round(Math.max(0, share) * 100 * ECONOMY.coinsPerPercent);
   const killCoins = Math.max(0, kills) * ECONOMY.coinsPerKill;
   const time = Math.floor(Math.max(0, seconds) / ECONOMY.secondsPerCoin);
   const win = won ? ECONOMY.winBonus : 0;
-  const base = territory + killCoins + time + win;
+  const extra = Math.max(0, Math.round(bonus || 0)); // kill streaks, king bounty
+  const base = territory + killCoins + time + win + extra;
   let mult = 1;
   if (ranked) mult *= ECONOMY.rankedMultiplier;
   if (magnet) mult *= ECONOMY.magnetMultiplier;
   const total = Math.max(0, Math.round(base * mult));
-  return { territory, kills: killCoins, time, win, base, mult, ranked, magnet, total };
+  return { territory, kills: killCoins, time, win, bonus: extra, base, mult, ranked, magnet, total };
 }
 
 export function addCoins(state, amount) {

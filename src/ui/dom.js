@@ -149,3 +149,10 @@ export function fmtDuration(ms, t) {
   if (hh > 0) return ru ? `${hh} ч ${mm} мин` : `${hh}h ${mm}m`;
   return ru ? `${mm} мин` : `${mm}m`;
 }
+
+/** h:mm:ss countdown. */
+export function fmtClock(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+  return `${hh}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}

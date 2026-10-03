@@ -12,11 +12,13 @@ export function defaultState() {
     boosts: { bigStart: 0, shield: 0, speed: 0, magnet: 0 },
     armed: { bigStart: false, shield: false, speed: false, magnet: false },
     rank: { tier: 0, rp: 0, best: 0 },
-    stats: { matches: 0, ranked: 0, kills: 0, bestShare: 0, wins: 0, playTime: 0, captures: 0, coinsEarned: 0 },
+    stats: { matches: 0, ranked: 0, kills: 0, bestShare: 0, wins: 0, playTime: 0, captures: 0, coinsEarned: 0, bestStreak: 0, kingKills: 0, longestLife: 0 },
     pass: { season: 0, xp: 0, premium: false, adViews: 0, claimedFree: [], claimedPrem: [] },
     quests: { day: '', list: [] },
     daily: { lastDay: '', streak: 0 },
     adBoost: { day: '', count: 0 },
+    chest: { nextAt: 0 },
+    achievements: { done: [], claimed: [] },
     tutorialDone: false,
     tutorialRewarded: false,
     settings: { music: 0.55, sfx: 0.8, muted: false, lang: '', quality: 'high' },
@@ -101,6 +103,10 @@ export function sanitize(raw) {
   s.pass.claimedFree = [...new Set(s.pass.claimedFree.filter(Number.isInteger))];
   s.pass.claimedPrem = [...new Set(s.pass.claimedPrem.filter(Number.isInteger))];
   s.daily.streak = clampInt(s.daily.streak, 0, 1e5);
+  // a chest timer far in the future means the clock was rolled back: cap it
+  s.chest.nextAt = Math.max(0, Math.min(s.chest.nextAt, Date.now() + 3 * 3600 * 1000));
+  s.achievements.done = [...new Set(s.achievements.done.filter((x) => typeof x === 'string'))];
+  s.achievements.claimed = [...new Set(s.achievements.claimed.filter((x) => s.achievements.done.includes(x)))];
   s.settings.music = Math.max(0, Math.min(1, s.settings.music));
   s.settings.sfx = Math.max(0, Math.min(1, s.settings.sfx));
   if (!['high', 'low'].includes(s.settings.quality)) s.settings.quality = 'high';

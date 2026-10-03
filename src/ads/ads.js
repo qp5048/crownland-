@@ -46,6 +46,31 @@ export class AdManager extends Emitter {
     return ok;
   }
 
+  /**
+   * CrazyGames display banner (menus only, never during gameplay). A container
+   * is filled at most once per minute; returns true if a banner was requested.
+   */
+  async banner(id, width, height) {
+    const api = this.sdk.banner;
+    if (!api?.requestBanner) return false;
+    this.bannerAt = this.bannerAt || {};
+    const key = `${id}:${width}x${height}`;
+    if (this.now() - (this.bannerAt[key] ?? -Infinity) < 60_000) return false;
+    this.bannerAt[key] = this.now();
+    try {
+      await api.requestBanner({ id, width, height });
+      return true;
+    } catch (error) {
+      this.emit('bannerError', { id, error });
+      return false;
+    }
+  }
+
+  clearBanners() {
+    // the refresh timestamps are kept: re-showing within a minute is skipped
+    try { this.sdk.banner?.clearAllBanners?.(); } catch { /* ignore */ }
+  }
+
   request(type) {
     this.busy = true;
     return new Promise((resolve) => {

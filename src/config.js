@@ -7,10 +7,10 @@ export const MAX_FRAME_STEPS = 6;       // avoid spiral of death after a long fr
 export const MAX_SLOTS = 32;            // player ids are 1..MAX_SLOTS (0 = nobody)
 
 export const GAME = {
-  speed: 7,               // cells per second
-  turnRate: 6.2,          // radians per second (turn radius ≈ 1.13 cells)
-  startRadius: 3.0,       // radius of spawn territory, in cells
-  bigStartRadius: 4.2,    // with the "Big Start" boost
+  speed: 5.4,             // cells per second
+  turnRate: 5.4,          // radians per second (turn radius ≈ 1 cell)
+  startRadius: 3.2,       // radius of spawn territory, in cells
+  bigStartRadius: 4.6,    // with the "Big Start" boost
   trailPointStep: 0.33,   // polyline resolution of the rendered trail
   selfGrace: 3,           // own trail cells this recent never kill you
   headOnDist: 0.85,       // head to head collision distance, cells

@@ -5,6 +5,55 @@ import { Particles } from './particles.js';
 
 const POP = 0.38; // seconds a freshly captured cell takes to settle
 
+/**
+ * Marching-squares piece of one grid square, walked clockwise (TL→TR→BR→BL)
+ * so every subpath has the same winding and neighbouring pieces merge cleanly.
+ */
+function contourPiece(path, xL, xR, yT, yB, tl, tr, br, bl) {
+  let first = true;
+  const pt = (x, y) => { if (first) { path.moveTo(x, y); first = false; } else path.lineTo(x, y); };
+  const edge = (x1, y1, v1, x2, y2, v2) => {
+    if (v1 >= 0.5) pt(x1, y1);
+    if ((v1 >= 0.5) !== (v2 >= 0.5)) {
+      const u = (0.5 - v1) / (v2 - v1);
+      pt(x1 + (x2 - x1) * u, y1 + (y2 - y1) * u);
+    }
+  };
+  edge(xL, yT, tl, xR, yT, tr);
+  edge(xR, yT, tr, xR, yB, br);
+  edge(xR, yB, br, xL, yB, bl);
+  edge(xL, yB, bl, xL, yT, tl);
+  path.closePath();
+}
+
+/** Small golden crown marking the current leader (the bounty target). */
+function drawKingCrown(ctx, x, y, size) {
+  const w = size * 1.3, h = size * 0.85;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = 'rgba(255,200,40,0.8)';
+  ctx.shadowBlur = size * 0.5;
+  ctx.fillStyle = '#ffc61a';
+  ctx.strokeStyle = '#a86b00';
+  ctx.lineWidth = Math.max(1, size * 0.1);
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, h / 2);
+  ctx.lineTo(-w / 2, -h * 0.15);
+  ctx.lineTo(-w / 4, h * 0.12);
+  ctx.lineTo(0, -h / 2);
+  ctx.lineTo(w / 4, h * 0.12);
+  ctx.lineTo(w / 2, -h * 0.15);
+  ctx.lineTo(w / 2, h / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+  ctx.fillStyle = '#ff4d6d';
+  ctx.beginPath(); ctx.arc(0, h * 0.18, size * 0.12, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
 /** Smoothly following camera with screen shake. Positions are in cells. */
 export class Camera {
   constructor() {
@@ -133,7 +182,7 @@ export class Renderer {
     }
 
     // ---- territory
-    this.drawTerritory(ctx, grid, t, x0, x1, y0, y1, SX, SY, s, pal);
+    this.drawTerritory(ctx, grid, t, x0, x1, y0, y1, s, offX, offY, pal);
 
     // map frame
     ctx.strokeStyle = '#9fb2c6';
@@ -191,6 +240,7 @@ export class Renderer {
       ctx.strokeText(p.name, X, Y);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(p.name, X, Y);
+      if (p.isKing) drawKingCrown(ctx, X, Y - fs * 1.25 + Math.sin(t * 3) * fs * 0.08, fs * 0.95);
     }
   }
 
@@ -214,75 +264,103 @@ export class Renderer {
     return this.hatch;
   }
 
-  drawTerritory(ctx, grid, t, x0, x1, y0, y1, SX, SY, s, pal) {
-    const { owner, fxAt, fxPrev, w } = grid;
-    const depth = Math.max(2, Math.round(s * 0.2));
-    const pops = this._pops || (this._pops = []);
-    pops.length = 0;
-    // pass 1: sides, pass 2: tops (sides only show below the lifted tops)
-    for (let pass = 0; pass < 2; pass++) {
-      for (let y = y0; y <= y1; y++) {
-        const top = SY(y), bot = SY(y + 1);
-        const rowY = pass === 0 ? top + depth : top;
-        let runOwner = 0, runStart = x0;
-        const row = y * w;
-        for (let x = x0; x <= x1 + 1; x++) {
-          let o = 0;
-          if (x <= x1) {
-            const i = row + x;
-            o = owner[i];
-            const at = fxAt[i];
-            if (at > t - POP && at !== 0) {
-              if (t < at) o = fxPrev[i];
-              else {
-                if (pass === 1) pops.push(i);
-                o = -1; // drawn separately with a pop animation
-              }
+  /**
+   * Smooth territory. Every owner's land is a scalar field sampled at cell
+   * centres (1 = owned, 0 = not; fractional while a capture wave passes) and
+   * contoured with marching squares at 0.5. Straight edges land exactly on cell
+   * borders, staircases become clean diagonals, and a capture "flows" in
+   * instead of popping square by square. One Path2D per owner, filled in one
+   * call, so pieces never show seams; a round-join stroke softens corners.
+   */
+  drawTerritory(ctx, grid, t, x0, x1, y0, y1, s, offX, offY, pal) {
+    const { owner, fxAt, fxPrev, w: gw, h: gh } = grid;
+    const gx0 = x0 - 1, gy0 = y0 - 1;
+    const W = x1 - x0 + 3, H = y1 - y0 + 3, n = W * H;
+    let b = this._terr;
+    if (!b || b.ownA.length < n || b.sx.length < W || b.sy.length < H) {
+      const m = n * 2;
+      b = this._terr = {
+        ownA: new Uint8Array(m), valA: new Float32Array(m), ownB: new Uint8Array(m), valB: new Float32Array(m),
+        f: new Float32Array(m), g: new Float32Array(m), sx: new Float32Array(W * 2), sy: new Float32Array(H * 2), present: new Uint8Array(MAX_SLOTS + 1),
+      };
+    }
+    const { ownA, valA, ownB, valB, f, g, sx, sy, present } = b;
+    present.fill(0);
+    for (let cy = 0; cy < H; cy++) {
+      const y = gy0 + cy;
+      for (let cx = 0; cx < W; cx++) {
+        const x = gx0 + cx, c = cy * W + cx;
+        let oa = 0, va = 0, ob = 0, vb = 0;
+        if (x >= 0 && y >= 0 && x < gw && y < gh) {
+          const i = y * gw + x;
+          const at = fxAt[i];
+          if (at !== 0 && t < at + POP) {
+            if (t < at) { oa = fxPrev[i]; va = 1; }
+            else {
+              const k = ease.outCubic((t - at) / POP);
+              oa = owner[i]; va = k; ob = fxPrev[i]; vb = 1 - k;
+              if (ob === oa) { va = 1; ob = 0; }
             }
-          }
-          if (o !== runOwner) {
-            if (runOwner > 0) {
-              const c = pal[runOwner];
-              if (c) {
-                ctx.fillStyle = pass === 0 ? c.landDark : c.land;
-                ctx.fillRect(SX(runStart), rowY, SX(x) - SX(runStart), bot - top);
-              }
-            }
-            runOwner = o; runStart = x;
-          }
+          } else { oa = owner[i]; va = 1; }
         }
+        ownA[c] = oa; valA[c] = va; ownB[c] = ob; valB[c] = vb;
+        if (oa) present[oa] = 1;
+        if (ob) present[ob] = 1;
       }
     }
-    // pop-in / pop-out cells
-    for (const i of pops) {
-      const x = i % w, y = (i / w) | 0;
-      const k = clamp((t - fxAt[i]) / POP, 0, 1);
-      const o = owner[i];
-      const X = SX(x), Y = SY(y), cw = SX(x + 1) - X, ch = SY(y + 1) - Y;
-      if (o) {
-        const c = pal[o];
-        if (!c) continue;
-        const sc = ease.outBack(k);
-        const lift = (1 - k) * s * 0.25;
-        const ww = cw * sc, hh = ch * sc;
-        ctx.fillStyle = c.landDark;
-        ctx.fillRect(X + (cw - ww) / 2, Y + (ch - hh) / 2 + depth - lift, ww, hh);
-        ctx.fillStyle = c.land;
-        ctx.fillRect(X + (cw - ww) / 2, Y + (ch - hh) / 2 - lift, ww, hh);
-        if (k < 0.6) {
-          ctx.fillStyle = `rgba(255,255,255,${0.55 * (1 - k / 0.6)})`;
-          ctx.fillRect(X + (cw - ww) / 2, Y + (ch - hh) / 2 - lift, ww, hh);
+    for (let cx = 0; cx < W; cx++) sx[cx] = (gx0 + cx + 0.5) * s + offX;
+    for (let cy = 0; cy < H; cy++) sy[cy] = (gy0 + cy + 0.5) * s + offY;
+
+    const paths = this._paths || (this._paths = []);
+    paths.length = 0;
+    for (let o = 1; o <= MAX_SLOTS; o++) {
+      if (!present[o] || !pal[o]) continue;
+      for (let c = 0; c < n; c++) g[c] = (ownA[c] === o ? valA[c] : 0) + (ownB[c] === o ? valB[c] : 0);
+      // gentle 3×3 blur rounds corners; max(raw·0.62) keeps one-cell lines visible
+      for (let cy = 0; cy < H; cy++) {
+        for (let cx = 0; cx < W; cx++) {
+          const c = cy * W + cx;
+          const raw = g[c];
+          if (cx === 0 || cy === 0 || cx === W - 1 || cy === H - 1) { f[c] = raw; continue; }
+          const blur = (4 * raw + 2 * (g[c - 1] + g[c + 1] + g[c - W] + g[c + W]) + g[c - W - 1] + g[c - W + 1] + g[c + W - 1] + g[c + W + 1]) / 16;
+          f[c] = blur > raw * 0.62 ? blur : raw * 0.62;
         }
-      } else {
-        const c = pal[fxPrev[i]];
-        if (!c) continue;
-        const sc = 1 - ease.outCubic(k);
-        const ww = cw * sc, hh = ch * sc;
-        ctx.globalAlpha = sc;
-        ctx.fillStyle = c.land;
-        ctx.fillRect(X + (cw - ww) / 2, Y + (ch - hh) / 2 + (1 - sc) * s * 0.4, ww, hh);
-        ctx.globalAlpha = 1;
       }
+      const path = new Path2D();
+      for (let cy = 0; cy < H - 1; cy++) {
+        const yT = sy[cy], yB = sy[cy + 1];
+        let run = -1;
+        for (let cx = 0; cx < W - 1; cx++) {
+          const c = cy * W + cx;
+          const tl = f[c], tr = f[c + 1], br = f[c + W + 1], bl = f[c + W];
+          const a = tl >= 0.5, bb = tr >= 0.5, cc = br >= 0.5, d = bl >= 0.5;
+          if (a && bb && cc && d) { if (run < 0) run = cx; continue; }
+          if (run >= 0) { path.rect(sx[run], yT, sx[cx] - sx[run], yB - yT); run = -1; }
+          if (!a && !bb && !cc && !d) continue;
+          contourPiece(path, sx[cx], sx[cx + 1], yT, yB, tl, tr, br, bl);
+        }
+        if (run >= 0) path.rect(sx[run], yT, sx[W - 1] - sx[run], yB - yT);
+      }
+      paths.push(o, path);
+    }
+
+    const depth = Math.max(2, s * 0.2);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1, s * 0.2);
+    // pass 1: the darker extruded side, shifted down
+    ctx.save();
+    ctx.translate(0, depth);
+    for (let k = 0; k < paths.length; k += 2) {
+      const c = pal[paths[k]];
+      ctx.fillStyle = c.landDark; ctx.strokeStyle = c.landDark;
+      ctx.fill(paths[k + 1]); ctx.stroke(paths[k + 1]);
+    }
+    ctx.restore();
+    // pass 2: the tops
+    for (let k = 0; k < paths.length; k += 2) {
+      const c = pal[paths[k]];
+      ctx.fillStyle = c.land; ctx.strokeStyle = c.land;
+      ctx.fill(paths[k + 1]); ctx.stroke(paths[k + 1]);
     }
   }
 

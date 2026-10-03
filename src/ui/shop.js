@@ -142,6 +142,7 @@ export class ShopPage {
     this.app.toast(`${icon('check')}${t('toast.bought')} ${itemName(it)}`, 'good');
     this.app.celebrateAt(el);
     this.render();
+    this.app.checkAchievements(600);
   }
 
   equip(it) {

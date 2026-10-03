@@ -1,9 +1,11 @@
 import { BOOSTS, SKINS, resolveLook } from '../cosmetics/catalog.js';
 import { claimableCount, passLevel } from '../battlepass/pass.js';
 import { dailyStatus } from '../battlepass/daily.js';
+import { ACHIEVEMENTS, claimableAchievements } from '../progress/achievements.js';
+import { chestStatus } from '../progress/chest.js';
 import { RANKS, rankIconSVG, rankName } from '../ranked/ranks.js';
 import { t } from '../i18n/i18n.js';
-import { h } from './dom.js';
+import { fmtClock, h } from './dom.js';
 import { coin, icon, logoSVG } from './icons.js';
 import { Preview } from './preview.js';
 
@@ -60,10 +62,14 @@ export class Menu {
     this.tilePass = h('button.tile.t-pass.interactive', { on: { click: click(() => app.openPass()) } });
     this.tileQuests = h('button.tile.t-quests.interactive', { on: { click: click(() => app.openPass(true)) } });
     this.tileDaily = h('button.tile.t-daily.interactive', { on: { click: click(() => app.openDaily()) } });
-    const right = h('div.menu-col.right', {}, h('div.tiles', {}, this.tileShop, this.tilePass, this.tileQuests, this.tileDaily));
+    this.tileAch = h('button.tile.t-ach.interactive', { on: { click: click(() => app.openAchievements()) } });
+    this.tileChest = h('button.tile.t-chest.interactive', { on: { click: click(() => app.openChest()) } });
+    const right = h('div.menu-col.right', {}, h('div.tiles', {}, this.tileShop, this.tilePass, this.tileQuests, this.tileDaily, this.tileAch, this.tileChest));
 
     this.foot = h('div.menu-foot');
-    this.el.append(h('div.menu-wrap', {}, left, center, right), this.foot);
+    // CrazyGames display banner slot (filled through the SDK, menus only)
+    this.bannerEl = h('div#cg-banner-menu.cg-banner.hidden');
+    this.el.append(h('div.menu-wrap', {}, left, center, right), this.foot, this.bannerEl);
   }
 
   setMode(mode) {
@@ -75,11 +81,26 @@ export class Menu {
     this.el.classList.add('show');
     this.preview.setActive(true);
     this.refresh();
+    clearInterval(this.clock);
+    this.clock = setInterval(() => this.renderChestTile(), 1000);
   }
 
   hide() {
     this.el.classList.remove('show');
     this.preview.setActive(false);
+    clearInterval(this.clock);
+  }
+
+  renderChestTile() {
+    const st = chestStatus(this.app.state);
+    if (this.chestReady === st.ready && !st.ready && this.chestTime) {
+      this.chestTime.textContent = fmtClock(st.msLeft);
+      return;
+    }
+    this.chestReady = st.ready;
+    this.chestTime = h('small', { text: st.ready ? t('chest.ready') : fmtClock(st.msLeft) });
+    this.tileChest.classList.toggle('ready', st.ready);
+    this.tileChest.replaceChildren(h('span.t-ic', { html: icon('gift') }), h('b', { text: t('menu.chest') }), this.chestTime);
   }
 
   refresh() {
@@ -143,6 +164,11 @@ export class Menu {
       h('small', { text: `${s.quests.list.filter((q) => q.claimed).length} / ${s.quests.list.length}` }), questsReady ? h('span.badge', { text: questsReady }) : null].filter(Boolean));
     this.tileDaily.replaceChildren(...[h('span.t-ic', { html: icon('gift') }), h('b', { text: t('menu.daily') }),
       h('small', { text: t('daily.streak', { n: Math.max(1, daily.streak) }) }), daily.claimedToday ? null : h('span.badge', { text: '!' })].filter(Boolean));
+    const achReady = claimableAchievements(s);
+    this.tileAch.replaceChildren(...[h('span.t-ic', { html: icon('trophy') }), h('b', { text: t('menu.achievements') }),
+      h('small', { text: `${s.achievements.claimed.length} / ${ACHIEVEMENTS.length}` }), achReady ? h('span.badge', { text: achReady }) : null].filter(Boolean));
+    this.chestReady = null;
+    this.renderChestTile();
     this.foot.textContent = app.input.isTouchDevice ? t('menu.controlsTouch') : t('menu.controlsDesktop');
   }
 

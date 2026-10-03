@@ -7,7 +7,8 @@ import { AdManager } from './ads/ads.js';
 import { SaveManager } from './save/save.js';
 import { localStorageBackend, memoryStorage, safe, sdkDataBackend } from './save/storage.js';
 import { applyDom, detectLang, setLang, t } from './i18n/i18n.js';
-import { BOOSTS } from './cosmetics/catalog.js';
+import { BOOSTS, HATS, SKINS, TRAILS } from './cosmetics/catalog.js';
+import { evaluateAchievements } from './progress/achievements.js';
 import { Renderer } from './game/renderer.js';
 import { Match } from './game/match.js';
 import { Particles } from './game/particles.js';
@@ -22,7 +23,7 @@ import { Hud } from './ui/hud.js';
 import { Menu } from './ui/menu.js';
 import { ShopPage, FREE_BOOSTS_PER_DAY } from './ui/shop.js';
 import { PassPage, questText } from './ui/pass.js';
-import { dailyDialog, pauseDialog, rankChangeDialog, resultsDialog, reviveDialog, settingsDialog } from './ui/dialogs.js';
+import { achievementsDialog, chestDialog, dailyDialog, pauseDialog, rankChangeDialog, resultsDialog, reviveDialog, settingsDialog } from './ui/dialogs.js';
 import { Tutorial } from './ui/tutorial.js';
 
 export class App {
@@ -112,8 +113,8 @@ export class App {
     setTimeout(() => this.loadingEl.remove(), 500);
     if (this.saveMgr.corrupted) this.toast(t('toast.saved'));
 
-    if (!this.state.tutorialDone) this.startTutorial();
-    else this.showMenu();
+    // always open on the menu; the tutorial starts with the very first "Play"
+    this.showMenu();
   }
 
   buildLoading() {
@@ -245,10 +246,61 @@ export class App {
     if (!this.demo) this.demo = new Match({ mode: 'demo', renderer: this.renderer, audio: null, input: null });
     this.menu.show();
     this.audio.playMusic('menu');
+    this.checkAchievements();
+    setTimeout(() => this.showMenuBanner(), 400);
     if (this.state.tutorialDone && !this.dailyShown && !dailyStatus(this.state).claimedToday) {
       this.dailyShown = true;
       setTimeout(() => { if (this.screen === 'menu' && !this.modals.open) this.openDaily(); }, 700);
     }
+  }
+
+  /** CrazyGames display banner under the menu (menus only, sized to the screen). */
+  async showMenuBanner() {
+    if (this.screen !== 'menu') return;
+    const el = this.menu.bannerEl;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const size = vw >= 1100 && vh >= 720 ? [728, 90] : vw >= 760 && vh >= 600 ? [468, 60] : vw >= 330 && vh >= 560 ? [320, 50] : null;
+    const hide = () => { el.classList.add('hidden'); this.menu.el.style.removeProperty('--banner-h'); };
+    if (!size) { hide(); return; }
+    el.style.width = `${size[0]}px`;
+    el.style.height = `${size[1]}px`;
+    el.classList.remove('hidden');
+    this.menu.el.style.setProperty('--banner-h', `${size[1] + 14}px`);
+    const ok = await this.ads.banner(el.id, size[0], size[1]);
+    if (!ok && !el.childElementCount) hide();
+  }
+
+  hideBanners() {
+    this.ads.clearBanners();
+    this.menu.bannerEl.classList.add('hidden');
+    this.menu.el.style.removeProperty('--banner-h');
+  }
+
+  /** Newly finished achievements → toast; returns them. */
+  checkAchievements(delay = 0) {
+    const fresh = evaluateAchievements(this.state);
+    if (fresh.length) {
+      this.persist();
+      fresh.forEach((a, k) => setTimeout(() => {
+        this.sfx('reward');
+        this.toast(`${icon(a.icon)}${t('ach.unlocked', { name: t(`ach.${a.id}`) })}`, 'good');
+      }, delay + k * 900));
+      this.menu.refresh();
+    }
+    return fresh;
+  }
+
+  openAchievements() { return achievementsDialog(this); }
+  openChest() { return chestDialog(this); }
+
+  /** The next thing worth saving up for (cheapest unowned shop item). */
+  nextGoal() {
+    const s = this.state;
+    const items = [...SKINS, ...HATS, ...TRAILS].filter((i) => i.price && !s.owned[i.kind].includes(i.id)).sort((a, b) => a.price - b.price);
+    if (!items.length) return null;
+    const affordable = items.filter((i) => i.price <= s.coins);
+    if (affordable.length) return { item: affordable[affordable.length - 1], affordable: true };
+    return { item: items[0], affordable: false, left: items[0].price - s.coins, progress: s.coins / items[0].price };
   }
 
   openShop(tab) {
@@ -297,6 +349,7 @@ export class App {
 
   play(mode) {
     this.lastMode = mode;
+    if (!this.state.tutorialDone) { this.startTutorial(); return; }
     this.startMatch(mode);
   }
 
@@ -317,8 +370,11 @@ export class App {
       renderer: this.renderer,
       input: this.input,
       audio: this.audio,
+      best: s.stats.bestShare,
     });
     this.match = m;
+    this.hideBanners();
+    m.on('happy', () => this.gameplay.happytime());
     this.paused = false;
     this.loop.simPaused = false;
     this.screen = 'match';
@@ -431,7 +487,7 @@ export class App {
   /** Credit coins, XP, rank points, quests and stats; returns data for the results screen. */
   processMatch(result) {
     const s = this.state;
-    const coins = computeMatchCoins({ share: result.share, kills: result.kills, seconds: result.seconds, won: result.won, ranked: result.ranked, magnet: result.magnet });
+    const coins = computeMatchCoins({ share: result.share, kills: result.kills, seconds: result.seconds, won: result.won, ranked: result.ranked, magnet: result.magnet, bonus: result.bonus });
     addCoins(s, coins.total);
     const xp = matchXP(result);
     ensureSeason(s);
@@ -444,6 +500,9 @@ export class App {
     s.stats.wins += result.won ? 1 : 0;
     s.stats.playTime += Math.round(result.seconds);
     s.stats.captures += result.captures;
+    s.stats.bestStreak = Math.max(s.stats.bestStreak, result.maxStreak || 0);
+    s.stats.kingKills += result.kingKills || 0;
+    s.stats.longestLife = Math.max(s.stats.longestLife, Math.round(result.seconds));
     ensureQuests(s);
     const completed = trackMatch(s, { ...result, coins: coins.total });
     let rp = null, rankBefore = null, rankAfter = null;
@@ -453,8 +512,9 @@ export class App {
       rp = applyRP(s.rank, delta);
       rankAfter = { tier: s.rank.tier, rp: s.rank.rp };
     }
+    const achievements = evaluateAchievements(s);
     this.persist(true);
-    return { result, coins, xp, passGain, newBest, completed, rp, rankBefore, rankAfter };
+    return { result, coins, xp, passGain, newBest, completed, rp, rankBefore, rankAfter, achievements, goal: this.nextGoal() };
   }
 
   async onMatchOver(result) {
@@ -471,6 +531,10 @@ export class App {
     const choicePromise = resultsDialog(this, data);
     for (const q of data.completed) setTimeout(() => this.toast(`${icon('scroll')}${t('toast.questDone', { name: questText(q) })}`, 'good'), 2400);
     if (data.passGain.levelsGained > 0) setTimeout(() => this.toast(`${icon('ticket')}${t('toast.passLevel', { n: data.passGain.after })}`, 'good'), 3000);
+    data.achievements.forEach((a, k) => setTimeout(() => {
+      this.sfx('reward');
+      this.toast(`${icon(a.icon)}${t('ach.unlocked', { name: t(`ach.${a.id}`) })}`, 'good');
+    }, 3600 + k * 900));
     const choice = await choicePromise;
     if (data.rp && (data.rp.promoted || data.rp.demoted)) {
       if (data.rp.promoted) this.gameplay.happytime();
@@ -480,6 +544,7 @@ export class App {
     // midgame ads only ever run here: between the results screen and what comes next
     await this.ads.midgame();
     if (choice === 'again') this.startMatch(this.lastMode);
+    else if (choice === 'shop') { this.endMatch(); this.showMenu(); this.openShop(data.goal?.item?.kind || 'skin'); }
     else { this.endMatch(); this.showMenu(); }
   }
 
@@ -505,6 +570,7 @@ export class App {
     const boost = res.boost ? ` + ${t(`boost.${res.boost}`)}` : '';
     this.toast(`${coin()}+${res.coins}${boost}`, 'good');
     this.menu.refresh();
+    this.checkAchievements(1200);
     return true;
   }
 

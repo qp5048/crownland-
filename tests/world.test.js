@@ -112,11 +112,12 @@ test('ranked: simultaneous mutual kills never hand land to a dead player', () =>
 
 test('shield absorbs one lethal hit', () => {
   const w = new World({ size: 40, seed: 8 });
-  const p = w.addPlayer({ name: 'A', controller: script([[L, 10]]) }, { x: 8, y: 20, angle: L });
+  // drive into the left wall once, then steer away after the bounce
+  const p = w.addPlayer({ name: 'A', controller: script([[L, 1.3], [R, 10]]) }, { x: 6, y: 20, angle: L });
   p.shield = 1;
   let shielded = 0;
   w.on('shield', () => shielded++);
-  run(w, 1.5);
+  run(w, 2);
   assert.ok(p.alive, 'survives the first wall hit');
   assert.equal(shielded, 1);
   assert.equal(p.shield, 0);

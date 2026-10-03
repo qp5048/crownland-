@@ -53,7 +53,7 @@ export class Grid {
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-        if (dx * dx + dy * dy <= r2) {
+        if (dx * dx + dy * dy < r2) {
           const i = y * this.w + x;
           const prev = this.setOwner(i, id);
           if (out) out.push(i, prev);

@@ -31,7 +31,7 @@ const RARITY_WEIGHTS = {
  * Emits: countdown(n), go, feed({kind, ...}), humanCapture, offerRevive, revived, over(results)
  */
 export class Match extends Emitter {
-  constructor({ mode, tier = 0, look, nickname = 'You', boosts = {}, renderer, input, audio }) {
+  constructor({ mode, tier = 0, look, nickname = 'You', boosts = {}, renderer, input, audio, best = 0 }) {
     super();
     this.mode = mode;
     this.ranked = mode === 'ranked';
@@ -54,6 +54,17 @@ export class Match extends Emitter {
     this.aliveTime = 0;
     this.lbTimer = 0;
     this.result = null;
+    // engagement extras: kill streaks, the "king" bounty, personal record
+    this.best = best;
+    this.recordShown = false;
+    this.bonusCoins = 0;
+    this.streak = 0;
+    this.lastKillAt = -99;
+    this.maxStreak = 0;
+    this.kingKills = 0;
+    this.king = null;
+    this.kingTimer = 0;
+    this.wasKing = false;
 
     let size, bots, level;
     if (mode === 'ranked') { size = rankMapSize(tier); bots = rankBotCount(tier); level = rankLevel(tier); }
@@ -152,6 +163,7 @@ export class Match extends Emitter {
         const coins = Math.round(ECONOMY.coinsPerKill * (this.ranked ? ECONOMY.rankedMultiplier : 1) * (this.boosts.magnet ? ECONOMY.magnetMultiplier : 1));
         this.renderer.floatText(victim.x, victim.y - 0.5, `+${coins}`, '#ffd23f', 1.3, true);
         this.emit('feed', { kind: 'kill', name: victim.name });
+        this.onHumanKill(victim);
       } else if (visible) {
         this.audio?.play('enemyDeath');
       }
@@ -169,6 +181,55 @@ export class Match extends Emitter {
       ps.burst(player.x, player.y, '#8fe3ff', 24, 1, 6, 'circle');
       this.emit('feed', { kind: 'shield' });
     });
+  }
+
+  /** Coin multiplier that applies to in-match bonuses (same rules as the results screen). */
+  bonusMul() { return (this.ranked ? ECONOMY.rankedMultiplier : 1) * (this.boosts.magnet ? ECONOMY.magnetMultiplier : 1); }
+
+  onHumanKill(victim) {
+    const t = this.world.time;
+    this.streak = t - this.lastKillAt <= 7 ? this.streak + 1 : 1;
+    this.lastKillAt = t;
+    this.maxStreak = Math.max(this.maxStreak, this.streak);
+    if (this.streak >= 2) {
+      const bonus = this.streak === 2 ? 10 : this.streak === 3 ? 25 : 50;
+      this.bonusCoins += bonus;
+      this.audio?.play('reward');
+      this.emit('feed', { kind: 'streak', n: this.streak, coins: Math.round(bonus * this.bonusMul()) });
+    }
+    if (victim.isKing) {
+      this.kingKills++;
+      this.bonusCoins += 50;
+      this.renderer.camera.shake(9);
+      this.emit('feed', { kind: 'kingKill', name: victim.name, coins: Math.round(50 * this.bonusMul()) });
+      this.emit('happy');
+    }
+  }
+
+  /** The current leader wears a crown; knocking them out pays a bounty. */
+  updateKing(dt) {
+    this.kingTimer -= dt;
+    if (this.kingTimer > 0) return;
+    this.kingTimer = 0.5;
+    const top = this.world.leaderboard()[0];
+    const king = top && top.share > 0.004 && top.player.alive ? top.player : null;
+    if (king !== this.king) {
+      if (this.king) this.king.isKing = false;
+      this.king = king;
+      if (king) king.isKing = true;
+      if (king && king === this.human && !this.wasKing && this.mode !== 'tutorial') {
+        this.wasKing = true;
+        this.audio?.play('reward');
+        this.emit('feed', { kind: 'kingMe' });
+      }
+    }
+    const h = this.human;
+    if (h && h.alive && !this.recordShown && this.mode !== 'tutorial' && this.best >= 0.01 && h.maxShare > this.best) {
+      this.recordShown = true;
+      this.audio?.play('reward');
+      this.emit('feed', { kind: 'record' });
+      this.emit('happy');
+    }
   }
 
   scheduleRespawn() {
@@ -232,6 +293,9 @@ export class Match extends Emitter {
       killerName: this.deathInfo?.killerName || '',
       magnet: !!this.boosts.magnet,
       tier: this.tier,
+      bonus: this.bonusCoins,
+      maxStreak: this.maxStreak,
+      kingKills: this.kingKills,
     };
   }
 
@@ -264,6 +328,7 @@ export class Match extends Emitter {
     }
     if (this.state !== 'playing' && this.state !== 'demo') return;
     this.world.tick(dt);
+    if (this.state === 'playing' && this.mode !== 'tutorial') this.updateKing(dt);
     while (this.respawns.length && this.respawns[0] <= this.world.time) {
       this.respawns.shift();
       if (this.world.players.filter((p) => p.alive && !p.isHuman).length < this.botCount) this.addBot();

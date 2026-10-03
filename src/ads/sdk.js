@@ -40,6 +40,22 @@ export function createMockSDK({ adDuration = 2200, failRewarded = false, failMid
         showMockAdOverlay(type, adDuration, done);
       },
     },
+    banner: {
+      // draws a labelled placeholder of the exact banner size, like a test ad
+      requestBanner: async ({ id, width, height }) => {
+        log.push(`banner:${id}:${width}x${height}`);
+        const el = typeof document !== 'undefined' && document.getElementById(id);
+        if (!el) throw new Error(`no container #${id}`);
+        el.innerHTML = `<div class="mock-banner" style="width:${width}px;height:${height}px"><span>AD · ${width}×${height}</span><small>CrazyGames banner (mock)</small></div>`;
+      },
+      clearBanner: (id) => {
+        const el = typeof document !== 'undefined' && document.getElementById(id);
+        if (el) el.innerHTML = '';
+      },
+      clearAllBanners: () => {
+        if (typeof document !== 'undefined') document.querySelectorAll('.cg-banner').forEach((el) => { el.innerHTML = ''; });
+      },
+    },
     data: null, // the mock persists through localStorage instead
   };
   return sdk;
