@@ -12,8 +12,8 @@ const js = files.find((f) => f.endsWith('.js'));
 const css = files.find((f) => f.endsWith('.css'));
 
 const style = fs.readFileSync(path.join(assets, css), 'utf8').replace(
-  /url\(\.\/([^)]+\.woff2)\)/g,
-  (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(assets, f)).toString('base64')})`,
+  /url\((['"]?)\.\/([^)'"]+\.woff2)\1\)/g,
+  (m, q, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(assets, f)).toString('base64')})`,
 );
 // a literal "</script" inside the bundle would end the inline tag early
 const script = fs.readFileSync(path.join(assets, js), 'utf8').replace(/<\/script/gi, '<\\/script');
