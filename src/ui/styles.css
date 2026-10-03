@@ -562,6 +562,7 @@ input { -webkit-user-select: text; user-select: text; }
 
 /* ----------------------------------------------------------- tutorial */
 .tut-layer { position: absolute; inset: 0; z-index: 30; }
+.tut-block { position: absolute; inset: 0; }
 .tut-dim { position: absolute; inset: 0; background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), transparent 0, transparent var(--r, 120px), rgba(15, 25, 45, 0.5) calc(var(--r, 120px) + 40px)); transition: opacity 0.4s; opacity: 0; }
 .tut-dim.on { opacity: 1; }
 .spot { position: absolute; border-radius: 22px; box-shadow: 0 0 0 9999px rgba(15, 25, 45, 0.58); transition: all 0.5s var(--out); pointer-events: none; }

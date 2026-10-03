@@ -1,3 +1,4 @@
+import { GAME } from '../config.js';
 import { formatTime } from '../core/math.js';
 import { DAILY_REWARDS, dailyStatus } from '../battlepass/daily.js';
 import { RANKS, rankIconSVG, rankName } from '../ranked/ranks.js';
@@ -51,7 +52,7 @@ export function resultsDialog(app, data) {
   const { result, coins } = data;
   return app.modals.show((close) => {
     const title = h(`h2.res-title${result.won ? '.win' : ''}`, { text: result.won ? t('results.victory') : t('results.over') });
-    const reason = result.won ? '' : t(`death.${result.cause || 'cut'}`, { name: result.killerName || '?' });
+    const reason = result.won || !result.cause ? '' : t(`death.${result.cause}`, { name: result.killerName || '?' });
     const stat = (ic, label, cls = '') => {
       const b = h('b', { text: '0' });
       const el = h(`div.stat${cls}`, {}, h('span', { html: icon(ic) }), b, h('small', { text: label }));
@@ -250,7 +251,8 @@ export function settingsDialog(app) {
         h('div.set-row', {}, h('label', { html: `${icon('sparkle')}${t('settings.graphics')}` }), gfx),
         h('div.set-row', {}, h('label', { html: `${icon('keyboard')}${t('settings.controls')}` })),
         h('div.set-note', { text: t('settings.controlsText') }),
-        h('button.btn.ghost', { html: `${icon('flag')}${t('settings.tutorial')}`, on: { click: () => { app.sfx('click'); close(); app.startTutorial(); } } })),
+        // replaying the tutorial would abandon a running match, so only offer it from the menu
+        app.match ? null : h('button.btn.ghost', { html: `${icon('flag')}${t('settings.tutorial')}`, on: { click: () => { app.sfx('click'); close(); app.startTutorial(); } } })),
       h('div.set-note', { style: { textAlign: 'center', marginTop: '12px' }, text: `CrownLand.io v${app.version}` }));
   });
 }
@@ -263,7 +265,7 @@ export function pauseDialog(app) {
     h('div.actions', {},
       h('button.btn.green.big', { html: `${icon('play')}${t('pause.resume')}`, on: { click: () => { app.sfx('click'); close('resume'); } } }),
       h('button.btn.ghost', { html: `${icon('gear')}${t('menu.settings')}`, on: { click: () => { app.sfx('click'); close('settings'); } } }),
-      h('button.btn.red', { html: `${icon('back')}${t('pause.quit')}`, on: { click: () => { app.sfx('click'); close('quit'); } } }))),
+      h('button.btn.red', { html: `${icon('back')}${app.match?.ranked ? t('pause.quitRanked', { n: GAME.rankedQuitPenalty }) : t('pause.quit')}`, on: { click: () => { app.sfx('click'); close('quit'); } } }))),
   { dismissible: true });
 }
 

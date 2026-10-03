@@ -1,9 +1,10 @@
-import { DT, MAX_SLOTS } from '../config.js';
+import { DT, GRID, MAX_SLOTS } from '../config.js';
 import { clamp, damp, ease, TAU } from '../core/math.js';
 import { drawHat, drawHead, drawTrail, emitSkinFx, emitTrailFx, skinPalette } from '../cosmetics/draw.js';
 import { Particles } from './particles.js';
 
 const POP = 0.38; // seconds a freshly captured cell takes to settle
+const GAME_HEAD = GRID * 1.02; // drawn head size in cells
 
 /**
  * Marching-squares piece of one grid square, walked clockwise (TL→TR→BR→BL)
@@ -78,7 +79,8 @@ export class Camera {
   }
   shake(amount) { this.shakeAmp = Math.max(this.shakeAmp, amount); }
   fit(vw, vh) {
-    this.cellPx = clamp(Math.sqrt(vw * vh) / 29, 15, 56);
+    // pixels per world unit (one head), converted to pixels per grid cell
+    this.cellPx = clamp(Math.sqrt(vw * vh) / 29, 15, 56) / GRID;
   }
 }
 
@@ -149,12 +151,13 @@ export class Renderer {
     const offY = H / 2 - cam.y * s + cam.shakeY * this.dpr;
     const SX = (x) => Math.round(x * s + offX);
     const SY = (y) => Math.round(y * s + offY);
+    const us = s * GRID; // device pixels per world unit (head size)
 
     // ---- background: only paint the outside-of-map area when it is on screen
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const mx0 = SX(0), my0 = SY(0), mx1 = SX(grid.w), my1 = SY(grid.h);
     if (mx0 > 0 || my0 > 0 || mx1 < W || my1 < H) {
-      ctx.fillStyle = this.hatchPattern(s);
+      ctx.fillStyle = this.hatchPattern(us);
       const tile = this.hatchTile;
       const ox = ((offX % tile) + tile) % tile, oy = ((offY % tile) + tile) % tile;
       ctx.save();
@@ -162,7 +165,7 @@ export class Renderer {
       ctx.fillRect(-ox, -oy, W, H);
       ctx.restore();
       ctx.fillStyle = 'rgba(40,70,110,0.18)';
-      ctx.fillRect(mx0 - s * 0.15, my0 + s * 0.25, mx1 - mx0 + s * 0.3, my1 - my0 + s * 0.15);
+      ctx.fillRect(mx0 - us * 0.15, my0 + us * 0.25, mx1 - mx0 + us * 0.3, my1 - my0 + us * 0.15);
     }
     ctx.fillStyle = '#f4f8fb';
     ctx.fillRect(Math.max(0, mx0), Math.max(0, my0), Math.min(W, mx1) - Math.max(0, mx0), Math.min(H, my1) - Math.max(0, my0));
@@ -172,12 +175,13 @@ export class Renderer {
     const y0 = clamp(Math.floor(cam.y - H / 2 / s) - 2, 0, grid.h - 1);
     const y1 = clamp(Math.ceil(cam.y + H / 2 / s) + 1, 0, grid.h - 1);
 
-    // subtle checkerboard tiles
-    if (s > 9) {
+    // subtle checkerboard tiles, one per world unit
+    if (us > 9) {
       ctx.fillStyle = '#ebf1f6';
-      for (let y = y0; y <= y1; y++) {
-        const top = SY(y), bot = SY(y + 1);
-        for (let x = x0 + ((x0 + y) & 1); x <= x1; x += 2) ctx.fillRect(SX(x), top, SX(x + 1) - SX(x), bot - top);
+      const tx0 = Math.floor(x0 / GRID), tx1 = Math.ceil(x1 / GRID), ty0 = Math.floor(y0 / GRID), ty1 = Math.ceil(y1 / GRID);
+      for (let ty = ty0; ty <= ty1; ty++) {
+        const top = SY(ty * GRID), bot = SY((ty + 1) * GRID);
+        for (let tx = tx0 + ((tx0 + ty) & 1); tx <= tx1; tx += 2) ctx.fillRect(SX(tx * GRID), top, SX((tx + 1) * GRID) - SX(tx * GRID), bot - top);
       }
     }
 
@@ -186,17 +190,17 @@ export class Renderer {
 
     // map frame
     ctx.strokeStyle = '#9fb2c6';
-    ctx.lineWidth = Math.max(2, s * 0.14);
+    ctx.lineWidth = Math.max(2, us * 0.14);
     ctx.strokeRect(mx0, my0, mx1 - mx0, my1 - my0);
     ctx.strokeStyle = 'rgba(255,90,80,0.35)';
-    ctx.lineWidth = Math.max(1, s * 0.06);
-    ctx.setLineDash([s * 0.5, s * 0.5]);
-    ctx.strokeRect(mx0 - s * 0.12, my0 - s * 0.12, mx1 - mx0 + s * 0.24, my1 - my0 + s * 0.24);
+    ctx.lineWidth = Math.max(1, us * 0.06);
+    ctx.setLineDash([us * 0.5, us * 0.5]);
+    ctx.strokeRect(mx0 - us * 0.12, my0 - us * 0.12, mx1 - mx0 + us * 0.24, my1 - my0 + us * 0.24);
     ctx.setLineDash([]);
 
     // ---- trails
     const visible = [];
-    const margin = 3;
+    const margin = 3 * GRID;
     for (const p of world.players) {
       if (!p.alive) continue;
       const ix = p.px + (p.x - p.px) * alpha, iy = p.py + (p.y - p.py) * alpha;
@@ -210,11 +214,11 @@ export class Renderer {
     // ---- cosmetics particles (emitted only for visible players)
     if (frameDt > 0) {
       for (const p of visible) {
-        if (p.trailPts.length >= 2) emitTrailFx(this.particles, p.look.trail, p.rx, p.ry, 1, frameDt);
-        emitSkinFx(this.particles, p.look.skin, p.rx, p.ry, 1, frameDt);
+        if (p.trailPts.length >= 2) emitTrailFx(this.particles, p.look.trail, p.rx, p.ry, GRID, frameDt);
+        emitSkinFx(this.particles, p.look.skin, p.rx, p.ry, GRID, frameDt);
         if (p.speedMul > 1 && this.particles.chance(30, frameDt)) {
           const a = p.angle + Math.PI + (Math.random() - 0.5) * 0.8;
-          this.particles.spawn(p.rx, p.ry, Math.cos(a) * 6, Math.sin(a) * 6, 0.3, 0.12, '#ffffff', 'spark', 0, 0.9);
+          this.particles.spawn(p.rx, p.ry, Math.cos(a) * 6 * GRID, Math.sin(a) * 6 * GRID, 0.3, 0.12 * GRID, '#ffffff', 'spark', 0, 0.9);
         }
       }
     }
@@ -228,13 +232,13 @@ export class Renderer {
     this.drawFloaters(ctx, frameDt, s, offX, offY);
 
     // ---- names last so they sit above everything
-    const fs = Math.round(clamp(s * 0.42, 11 * this.dpr, 19 * this.dpr));
+    const fs = Math.round(clamp(us * 0.42, 11 * this.dpr, 19 * this.dpr));
     ctx.font = `600 ${fs}px Rubik, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.lineJoin = 'round';
     for (const p of visible) {
-      const X = p.rx * s + offX, Y = p.ry * s + offY - s * (p.look.hat.id !== 'none' ? 1.15 : 0.78);
+      const X = p.rx * s + offX, Y = p.ry * s + offY - us * (p.look.hat.id !== 'none' ? 1.15 : 0.78);
       ctx.lineWidth = fs * 0.28;
       ctx.strokeStyle = 'rgba(20,32,56,0.55)';
       ctx.strokeText(p.name, X, Y);
@@ -270,8 +274,9 @@ export class Renderer {
    * contoured with marching squares at 0.5. Straight edges land exactly on cell
    * borders, staircases become clean diagonals, and a capture "flows" in
    * instead of popping square by square. One Path2D per owner, filled in one
-   * call, so pieces never show seams. No blur and no outward stroke: what you
-   * see as your land is your land.
+   * call, so pieces never show seams. Only a light symmetric smoothing on the
+   * fine grid and no outward stroke: the drawn edge stays within a fraction
+   * of a cell of the real one.
    */
   drawTerritory(ctx, grid, t, x0, x1, y0, y1, s, offX, offY, pal) {
     const { owner, fxAt, fxPrev, w: gw, h: gh } = grid;
@@ -282,10 +287,10 @@ export class Renderer {
       const m = n * 2;
       b = this._terr = {
         ownA: new Uint8Array(m), valA: new Float32Array(m), ownB: new Uint8Array(m), valB: new Float32Array(m),
-        f: new Float32Array(m), sx: new Float32Array(W * 2), sy: new Float32Array(H * 2), present: new Uint8Array(MAX_SLOTS + 1),
+        f: new Float32Array(m), g: new Float32Array(m), sx: new Float32Array(W * 2), sy: new Float32Array(H * 2), present: new Uint8Array(MAX_SLOTS + 1),
       };
     }
-    const { ownA, valA, ownB, valB, f, sx, sy, present } = b;
+    const { ownA, valA, ownB, valB, f, g, sx, sy, present } = b;
     present.fill(0);
     for (let cy = 0; cy < H; cy++) {
       const y = gy0 + cy;
@@ -316,7 +321,18 @@ export class Renderer {
     paths.length = 0;
     for (let o = 1; o <= MAX_SLOTS; o++) {
       if (!present[o] || !pal[o]) continue;
-      for (let c = 0; c < n; c++) f[c] = (ownA[c] === o ? valA[c] : 0) + (ownB[c] === o ? valB[c] : 0);
+      for (let c = 0; c < n; c++) g[c] = (ownA[c] === o ? valA[c] : 0) + (ownB[c] === o ? valB[c] : 0);
+      // symmetric 3×3 smoothing: on the fine grid it moves edges by a fraction
+      // of a cell (straight edges not at all), but turns staircases into curves.
+      // max(raw·0.62) keeps one-cell-thin land from vanishing.
+      for (let cy = 0; cy < H; cy++) {
+        for (let cx = 0; cx < W; cx++) {
+          const c = cy * W + cx, raw = g[c];
+          if (cx === 0 || cy === 0 || cx === W - 1 || cy === H - 1) { f[c] = raw; continue; }
+          const v = (4 * raw + 2 * (g[c - 1] + g[c + 1] + g[c - W] + g[c + W]) + g[c - W - 1] + g[c - W + 1] + g[c + W - 1] + g[c + W + 1]) / 16;
+          f[c] = v > raw * 0.62 ? v : raw * 0.62;
+        }
+      }
       const path = new Path2D();
       for (let cy = 0; cy < H - 1; cy++) {
         const yT = sy[cy], yB = sy[cy + 1];
@@ -339,7 +355,7 @@ export class Renderer {
     // band *inside* the bottom edges (top face shifted up, clipped to the
     // shape) instead of an extrusion hanging below it. A hairline stroke only
     // hides anti-aliasing seams between neighbouring territories.
-    const depth = Math.max(2, s * 0.18);
+    const depth = Math.max(2, s * GRID * 0.18);
     ctx.lineJoin = 'miter';
     ctx.lineWidth = Math.min(1.5, Math.max(1, s * 0.03));
     for (let k = 0; k < paths.length; k += 2) {
@@ -370,12 +386,12 @@ export class Renderer {
     buf[src.length] = ix * s + offX;
     buf[src.length + 1] = iy * s + offY;
     const color = skinPalette(p.look.skin).trail;
-    drawTrail(ctx, p.look.trail, buf, n, s * 0.46, color, t, p.id * 977);
+    drawTrail(ctx, p.look.trail, buf, n, s * GRID * 0.46, color, t, p.id * 977);
   }
 
   drawPlayer(ctx, p, s, offX, offY, t) {
     const X = p.rx * s + offX, Y = p.ry * s + offY;
-    const size = s * 1.02;
+    const size = s * GAME_HEAD;
     let alpha = 1;
     if (p.invuln > 0 && p.invuln < 30) alpha = 0.45 + 0.35 * Math.sin(t * 22);
     const lowQ = this.quality === 'low';
@@ -404,9 +420,9 @@ export class Renderer {
       f.t += dt;
       if (f.t >= f.life) { list.splice(k, 1); continue; }
       const p = f.t / f.life;
-      const X = f.x * s + offX, Y = (f.y - ease.outCubic(p) * 1.6) * s + offY;
+      const X = f.x * s + offX, Y = (f.y - ease.outCubic(p) * 1.6 * GRID) * s + offY;
       const pop = p < 0.15 ? ease.outBack(p / 0.15) : 1;
-      const fs = Math.round(clamp(s * 0.62 * f.size, 13 * this.dpr, 30 * this.dpr) * pop);
+      const fs = Math.round(clamp(s * GRID * 0.62 * f.size, 13 * this.dpr, 30 * this.dpr) * pop);
       ctx.globalAlpha = p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1;
       ctx.font = `800 ${fs}px Rubik, system-ui, sans-serif`;
       ctx.textAlign = 'center';

@@ -1,4 +1,4 @@
-import { ECONOMY, GAME, MAPS } from '../config.js';
+import { ECONOMY, GAME, GRID, MAPS } from '../config.js';
 import { Emitter } from '../core/emitter.js';
 import { clamp } from '../core/math.js';
 import { Rng } from '../core/rng.js';
@@ -7,7 +7,7 @@ import { botProfile, normalLevel, PERSONALITIES } from '../ai/difficulty.js';
 import { pickName } from '../ai/names.js';
 import { HATS, SKINS, TRAILS, resolveLook } from '../cosmetics/catalog.js';
 import { skinPalette } from '../cosmetics/draw.js';
-import { rankBotCount, rankLevel, rankMapSize } from '../ranked/ranks.js';
+import { rankBotCount, rankBotSpeed, rankLevel, rankMapSize } from '../ranked/ranks.js';
 import { World } from './world.js';
 
 /** Steers the human's square from the unified input. */
@@ -69,7 +69,7 @@ export class Match extends Emitter {
     let size, bots, level;
     if (mode === 'ranked') { size = rankMapSize(tier); bots = rankBotCount(tier); level = rankLevel(tier); }
     else if (mode === 'tutorial') { size = MAPS.tutorial.size; bots = 0; level = 0; }
-    else if (mode === 'demo') { size = 96; bots = 9; level = 0.35; }
+    else if (mode === 'demo') { size = 96 * GRID; bots = 9; level = 0.35; }
     else { size = MAPS.normal.size; bots = MAPS.normal.bots; level = null; }
     this.botCount = bots;
     this.level = level;
@@ -79,7 +79,7 @@ export class Match extends Emitter {
       // Big Start: a disc whose area is exactly bigStartShare of the map
       const radius = boosts.bigStart ? Math.sqrt((GAME.bigStartShare * size * size) / Math.PI) : GAME.startRadius;
       const spawn = mode === 'tutorial'
-        ? { x: size / 2, y: size / 2, radius: 3.2, angle: 0 }
+        ? { x: size / 2, y: size / 2, radius: 3.2 * GRID, angle: 0 }
         : { x: size / 2 + this.rng.float(-size * 0.2, size * 0.2), y: size / 2 + this.rng.float(-size * 0.2, size * 0.2), radius };
       this.human = this.world.addPlayer({ name: nickname || 'You', isHuman: true, look: resolveLook(look), controller: new HumanController(this) }, spawn);
       this.human.deferDeath = true;
@@ -120,13 +120,16 @@ export class Match extends Emitter {
   addBot(spawnOpts) {
     const level = this.level ?? normalLevel(this.rng);
     const personality = this.rng.pick(PERSONALITIES);
-    const profile = botProfile(clamp(level + this.rng.float(-0.06, 0.06), 0, 1), personality);
+    const profile = botProfile(clamp(level + this.rng.float(-0.06, 0.06), 0, 1.25), personality);
     const name = pickName(this.rng, this.usedNames);
     this.usedNames.add(name);
     const bot = this.world.addPlayer({
       name, look: this.randomLook(), controller: new BotController(profile, new Rng(this.rng.int(1, 2 ** 30))),
     }, spawnOpts);
-    if (bot) bot.personality = personality;
+    if (bot) {
+      bot.personality = personality;
+      if (this.ranked) bot.speed *= rankBotSpeed(this.tier);
+    }
     return bot;
   }
 
@@ -145,16 +148,16 @@ export class Match extends Emitter {
       if (!player.isHuman) return;
       const pct = (cells.length / w.grid.n) * 100;
       this.audio?.play('capture', { size: cells.length });
-      if (pct >= 0.05) this.renderer.floatText(player.x, player.y - 0.6, `+${pct.toFixed(pct < 1 ? 2 : 1)}%`, '#ffffff', pct > 2 ? 1.25 : 1);
-      ps.burst(player.x, player.y, skinPalette(player.look.skin).land, 10 + Math.min(30, cells.length / 6), 1, 5);
+      if (pct >= 0.05) this.renderer.floatText(player.x, player.y - 0.6 * GRID, `+${pct.toFixed(pct < 1 ? 2 : 1)}%`, '#ffffff', pct > 2 ? 1.25 : 1);
+      ps.burst(player.x, player.y, skinPalette(player.look.skin).land, 10 + Math.min(30, cells.length / (6 * GRID * GRID)), GRID, 5);
       this.emit('humanCapture', { cells: cells.length, pct });
     });
     w.on('death', ({ victim, killer, cause }) => {
       const pal = skinPalette(victim.look.skin);
       const visible = this.isVisible(victim.x, victim.y);
       if (visible) {
-        ps.burst(victim.x, victim.y, pal.mid, 26, 1, 8);
-        ps.burst(victim.x, victim.y, '#ffffff', 10, 1, 5, 'circle');
+        ps.burst(victim.x, victim.y, pal.mid, 26, GRID, 8);
+        ps.burst(victim.x, victim.y, '#ffffff', 10, GRID, 5, 'circle');
       }
       if (victim === this.human) { this.onHumanDeath(killer, cause); return; }
       if (this.mode !== 'tutorial' && this.mode !== 'scripted') this.scheduleRespawn();
@@ -162,7 +165,7 @@ export class Match extends Emitter {
         this.audio?.play('kill');
         this.renderer.camera.shake(7);
         const coins = Math.round(ECONOMY.coinsPerKill * (this.ranked ? ECONOMY.rankedMultiplier : 1) * (this.boosts.magnet ? ECONOMY.magnetMultiplier : 1));
-        this.renderer.floatText(victim.x, victim.y - 0.5, `+${coins}`, '#ffd23f', 1.3, true);
+        this.renderer.floatText(victim.x, victim.y - 0.5 * GRID, `+${coins}`, '#ffd23f', 1.3, true);
         this.emit('feed', { kind: 'kill', name: victim.name });
         this.onHumanKill(victim);
       } else if (visible) {
@@ -179,7 +182,7 @@ export class Match extends Emitter {
       if (player !== this.human) return;
       this.audio?.play('shield');
       this.renderer.camera.shake(5);
-      ps.burst(player.x, player.y, '#8fe3ff', 24, 1, 6, 'circle');
+      ps.burst(player.x, player.y, '#8fe3ff', 24, GRID, 6, 'circle');
       this.emit('feed', { kind: 'shield' });
     });
   }
@@ -249,7 +252,7 @@ export class Match extends Emitter {
     this.place = this.world.placeOf(h);
     this.audio?.play('death');
     this.renderer.camera.shake(16);
-    this.renderer.particles.burst(h.x, h.y, skinPalette(h.look.skin).mid, 40, 1, 10);
+    this.renderer.particles.burst(h.x, h.y, skinPalette(h.look.skin).mid, 40, GRID, 10);
     this.input?.reset();
     if (this.mode === 'tutorial') return;
     if (this.canRevive()) this.emit('offerRevive', this.deathInfo);
@@ -265,7 +268,7 @@ export class Match extends Emitter {
     this.human.deferDeath = true;
     this.state = 'playing';
     this.aliveSince = this.world.time;
-    this.renderer.particles.burst(this.human.x, this.human.y, '#ffffff', 30, 1, 6, 'circle');
+    this.renderer.particles.burst(this.human.x, this.human.y, '#ffffff', 30, GRID, 6, 'circle');
     this.emit('revived');
   }
 

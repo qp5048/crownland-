@@ -1,4 +1,4 @@
-import { ECONOMY } from './config.js';
+import { ECONOMY, GAME } from './config.js';
 import { GameLoop } from './core/loop.js';
 import { Input } from './core/input.js';
 import { AudioEngine } from './audio/audio.js';
@@ -115,6 +115,21 @@ export class App {
 
     // always open on the menu; the tutorial starts with the very first "Play"
     this.showMenu();
+    this.checkAbandonedRanked();
+  }
+
+  /** A ranked match that was running when the page closed counts as leaving it. */
+  checkAbandonedRanked() {
+    const s = this.state;
+    if (!s.rankedActive) return;
+    s.rankedActive = false;
+    const change = applyRP(s.rank, -GAME.rankedQuitPenalty);
+    this.persist(true);
+    this.menu.refresh();
+    setTimeout(() => {
+      this.toast(`${icon('trophy')}${t('rank.abandoned', { n: GAME.rankedQuitPenalty })}`, 'bad');
+      if (change.demoted) rankChangeDialog(this, change);
+    }, 900);
   }
 
   buildLoading() {
@@ -373,6 +388,7 @@ export class App {
       best: s.stats.bestShare,
     });
     this.match = m;
+    if (mode === 'ranked') { s.rankedActive = true; this.persist(true); }
     this.hideBanners();
     m.on('happy', () => this.gameplay.happytime());
     this.paused = false;
@@ -409,7 +425,11 @@ export class App {
   }
 
   togglePause() {
-    if (!this.match) return;
+    if (!this.match) {
+      // Esc on the shop / pass pages goes back to the menu
+      if (!this.modals.open && (this.shop.isOpen || this.pass.isOpen)) this.closePages();
+      return;
+    }
     if (this.paused) { this.modals.current?.close('resume'); return; }
     this.pauseGame();
   }
@@ -458,7 +478,8 @@ export class App {
     m.state = 'over';
     m.place = m.world.placeOf(m.human);
     m.result = m.buildResult(false);
-    m.result.cause = null;
+    m.result.cause = m.ranked ? 'quit' : null;
+    m.result.quit = true;
     this.onMatchOver(m.result);
   }
 
@@ -487,6 +508,7 @@ export class App {
   /** Credit coins, XP, rank points, quests and stats; returns data for the results screen. */
   processMatch(result) {
     const s = this.state;
+    s.rankedActive = false;
     const coins = computeMatchCoins({ share: result.share, kills: result.kills, seconds: result.seconds, won: result.won, ranked: result.ranked, magnet: result.magnet, bonus: result.bonus });
     addCoins(s, coins.total);
     const xp = matchXP(result);
@@ -508,7 +530,8 @@ export class App {
     let rp = null, rankBefore = null, rankAfter = null;
     if (result.ranked) {
       rankBefore = { tier: s.rank.tier, rp: s.rank.rp, need: RANKS[s.rank.tier].need };
-      const delta = computeRP({ ...result, tier: s.rank.tier });
+      // leaving a ranked match early costs a flat penalty
+      const delta = result.quit ? -GAME.rankedQuitPenalty : computeRP({ ...result, tier: s.rank.tier });
       rp = applyRP(s.rank, delta);
       rankAfter = { tier: s.rank.tier, rp: s.rank.rp };
     }
@@ -523,9 +546,11 @@ export class App {
     this.gameplay.stop();
     this.ads.matchFinished();
     if (m.mode === 'tutorial') return;
-    await sleep(900); // let the death animation breathe
-    if (this.match !== m) return;
+    // credit everything right away (and clear the "ranked in progress" flag),
+    // the results screen follows once the death animation has played
     const data = this.processMatch(result);
+    await sleep(900);
+    if (this.match !== m) return;
     if (data.newBest || result.won) this.gameplay.happytime();
     this.audio.playMusic('menu');
     const choicePromise = resultsDialog(this, data);

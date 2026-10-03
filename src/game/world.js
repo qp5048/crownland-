@@ -1,4 +1,4 @@
-import { GAME, MAX_SLOTS } from '../config.js';
+import { GAME, GRID, MAX_SLOTS } from '../config.js';
 import { Emitter } from '../core/emitter.js';
 import { angleDiff, clamp, TAU } from '../core/math.js';
 import { Rng } from '../core/rng.js';
@@ -61,7 +61,7 @@ export class World extends Emitter {
   spawnCost(x, y, r) {
     const g = this.grid;
     let cost = 0;
-    const R = Math.ceil(r + 3);
+    const R = Math.ceil(r + 3 * GRID);
     for (let dy = -R; dy <= R; dy++) {
       for (let dx = -R; dx <= R; dx++) {
         const cx = Math.floor(x) + dx, cy = Math.floor(y) + dy;
@@ -74,13 +74,13 @@ export class World extends Emitter {
     for (const p of this.players) {
       if (!p.alive) continue;
       const d = Math.hypot(p.x - x, p.y - y);
-      if (d < 14) cost += (14 - d) * 12;
+      if (d < 14 * GRID) cost += (14 * GRID - d) * 12;
     }
     return cost;
   }
 
   findSpawnPoint(r) {
-    const margin = r + 4;
+    const margin = r + 4 * GRID;
     let best = null, bestCost = Infinity;
     for (let k = 0; k < 70; k++) {
       const x = this.rng.float(margin, this.size - margin);
@@ -117,9 +117,9 @@ export class World extends Emitter {
 
   /** "Continue" after a death: put the player back where they died. */
   revive(p) {
-    const r = 2.2;
-    const x = clamp(p.x, r + 2, this.size - r - 2);
-    const y = clamp(p.y, r + 2, this.size - r - 2);
+    const r = 2.2 * GRID;
+    const x = clamp(p.x, r + 2 * GRID, this.size - r - 2 * GRID);
+    const y = clamp(p.y, r + 2 * GRID, this.size - r - 2 * GRID);
     p.pendingDeath = null;
     p.deferDeath = false;
     const keepAngle = p.angle;
@@ -274,14 +274,15 @@ export class World extends Emitter {
   }
 
   bounce(p) {
-    const nearX = p.x < 1.5 || p.x > this.size - 1.5;
-    const nearY = p.y < 1.5 || p.y > this.size - 1.5;
+    const m = 1.5 * GRID;
+    const nearX = p.x < m || p.x > this.size - m;
+    const nearY = p.y < m || p.y > this.size - m;
     if (nearX) p.angle = Math.PI - p.angle;
     if (nearY) p.angle = -p.angle;
     if (!nearX && !nearY) p.angle += Math.PI;
     p.targetAngle = p.angle;
-    p.x = clamp(p.x, 1, this.size - 1);
-    p.y = clamp(p.y, 1, this.size - 1);
+    p.x = clamp(p.x, GRID, this.size - GRID);
+    p.y = clamp(p.y, GRID, this.size - GRID);
     p.cx = Math.floor(p.x); p.cy = Math.floor(p.y);
   }
 

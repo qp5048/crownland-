@@ -20,6 +20,7 @@ export function defaultState() {
     chest: { nextAt: 0 },
     achievements: { done: [], claimed: [] },
     tutorialDone: false,
+    rankedActive: false,
     tutorialRewarded: false,
     settings: { music: 0.55, sfx: 0.8, muted: false, lang: '', quality: 'high' },
   };

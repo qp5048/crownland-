@@ -1,4 +1,4 @@
-import { ECONOMY } from '../config.js';
+import { ECONOMY, GRID as G } from '../config.js';
 import { TAU } from '../core/math.js';
 import { resolveLook } from '../cosmetics/catalog.js';
 import { t } from '../i18n/i18n.js';
@@ -9,13 +9,17 @@ const TOTAL_STEPS = 5;
 
 /** Follows a list of waypoints; when done, optionally asks for a new list. */
 class ScriptedController {
-  constructor(wps = [], { next } = {}) { this.wps = wps; this.next = next; }
+  constructor(wps = [], { next } = {}) { this.wps = wps; this.next = next; this.retry = 0; }
   update(world, p, dt) {
     if (p.frozen) return;
-    if (!this.wps.length && this.next) this.wps = this.next(world, p) || [];
+    this.retry -= dt;
+    if (!this.wps.length && this.next && this.retry <= 0) {
+      this.wps = this.next(world, p) || [];
+      if (!this.wps.length) this.retry = 0.5; // nowhere to go yet: try again shortly
+    }
     const wp = this.wps[0];
     if (!wp) { p.targetAngle = p.angle + dt * 2.2; return; } // idle: gentle circling
-    if (Math.hypot(wp.x - p.x, wp.y - p.y) < 0.9) { this.wps.shift(); return; }
+    if (Math.hypot(wp.x - p.x, wp.y - p.y) < 0.9 * G) { this.wps.shift(); return; }
     p.targetAngle = Math.atan2(wp.y - p.y, wp.x - p.x);
   }
 }
@@ -35,8 +39,9 @@ function segmentClear(world, a, b, id) {
  * trail passes near the player), the rest bends away from them. Never crosses
  * the player's land, so the dummy can't steal it.
  */
-function loopBeside(world, p, target, out = 7, side = 5) {
-  const clampPt = (x, y) => ({ x: Math.max(2.5, Math.min(world.size - 2.5, x)), y: Math.max(2.5, Math.min(world.size - 2.5, y)) });
+function loopBeside(world, p, target, out = 7 * G, side = 5 * G) {
+  const m = 2.5 * G;
+  const clampPt = (x, y) => ({ x: Math.max(m, Math.min(world.size - m, x)), y: Math.max(m, Math.min(world.size - m, y)) });
   const vx0 = target.x - p.x, vy0 = target.y - p.y;
   const vl = Math.hypot(vx0, vy0) || 1;
   const vx = vx0 / vl, vy = vy0 / vl;          // towards the player
@@ -44,7 +49,7 @@ function loopBeside(world, p, target, out = 7, side = 5) {
     for (const sgn of [1, -1]) {
       const tx = -vy * sgn, ty = vx * sgn;     // sideways
       let ex = p.x, ey = p.y;
-      for (let d = 0; d < 20 && world.ownerAt(ex, ey) === p.id; d += 0.5) { ex += tx * 0.5; ey += ty * 0.5; }
+      for (let d = 0; d < 20 * G && world.ownerAt(ex, ey) === p.id; d += 0.5) { ex += tx * 0.5; ey += ty * 0.5; }
       const e = { x: ex, y: ey };
       const a = clampPt(ex + tx * out * shrink, ey + ty * out * shrink);
       const b = clampPt(a.x - vx * side * shrink, a.y - vy * side * shrink);
@@ -179,12 +184,13 @@ export class Tutorial {
   freeSpot(px, py, avoid = []) {
     const w = this.match.world, g = w.grid, size = w.size, me = this.human;
     const clear = (x, y) => {
-      if (x < 6 || y < 6 || x > size - 6 || y > size - 6) return false;
-      if (Math.hypot(x - me.x, y - me.y) < 7) return false;
-      for (const a of avoid) if (Math.hypot(x - a.x, y - a.y) < 7) return false;
-      for (let dy = -5; dy <= 5; dy++) {
-        for (let dx = -5; dx <= 5; dx++) {
-          if (dx * dx + dy * dy > 25) continue;
+      const edge = 6 * G, far = 7 * G, R = 5 * G;
+      if (x < edge || y < edge || x > size - edge || y > size - edge) return false;
+      if (Math.hypot(x - me.x, y - me.y) < far) return false;
+      for (const a of avoid) if (Math.hypot(x - a.x, y - a.y) < far) return false;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          if (dx * dx + dy * dy > R * R) continue;
           const cx = Math.floor(x) + dx, cy = Math.floor(y) + dy;
           if (!g.inside(cx, cy)) continue;
           const i = g.idx(cx, cy);
@@ -193,7 +199,7 @@ export class Tutorial {
       }
       return true;
     };
-    for (let r = 0; r <= 30; r += 1.5) {
+    for (let r = 0; r <= 30 * G; r += 1.5 * G) {
       const steps = r ? 20 : 1;
       for (let k = 0; k < steps; k++) {
         const a = (k * TAU) / steps;
@@ -204,8 +210,8 @@ export class Tutorial {
     // a crowded map: take the emptiest of a few candidates rather than the player's land
     let best = null, bestCost = Infinity;
     for (let k = 0; k < 60; k++) {
-      const x = 6 + Math.random() * (size - 12), y = 6 + Math.random() * (size - 12);
-      const cost = w.spawnCost(x, y, 2.2) + (Math.hypot(x - me.x, y - me.y) < 7 ? 1e6 : 0);
+      const x = 6 * G + Math.random() * (size - 12 * G), y = 6 * G + Math.random() * (size - 12 * G);
+      const cost = w.spawnCost(x, y, 2.2 * G) + (Math.hypot(x - me.x, y - me.y) < 7 * G ? 1e6 : 0);
       if (cost < bestCost) { bestCost = cost; best = { x, y }; }
     }
     return best;
@@ -216,13 +222,13 @@ export class Tutorial {
     const size = this.match.world.size, me = this.human;
     const dx = size / 2 - me.x, dy = size / 2 - me.y;
     const l = Math.hypot(dx, dy);
-    if (l < 4) return { x: 1, y: 0 };
+    if (l < 4 * G) return { x: 1, y: 0 };
     return { x: dx / l, y: dy / l };
   }
 
   addDummy(x, y, controller, speedMul) {
     const w = this.match.world;
-    const p = w.addPlayer({ name: t('tut.dummy'), look: resolveLook({ skin: 'slate', hat: 'none', trail: 'classic' }), controller }, { x, y, radius: 2.2 });
+    const p = w.addPlayer({ name: t('tut.dummy'), look: resolveLook({ skin: 'slate', hat: 'none', trail: 'classic' }), controller }, { x, y, radius: 2.2 * G });
     if (p) p.speed *= speedMul;
     return p;
   }
@@ -234,23 +240,24 @@ export class Tutorial {
     // stage the show in free space on the roomy side, never on the player's land
     const u = this.roomyDirection();
     const pv = { x: -u.y, y: u.x };
-    const a = this.freeSpot(h0.x + u.x * 11 - pv.x * 5, h0.y + u.y * 11 - pv.y * 5);
-    const b = this.freeSpot(a.x + pv.x * 11, a.y + pv.y * 11, [a]);
+    const a = this.freeSpot(h0.x + (u.x * 11 - pv.x * 5) * G, h0.y + (u.y * 11 - pv.y * 5) * G);
+    const b = this.freeSpot(a.x + pv.x * 11 * G, a.y + pv.y * 11 * G, [a]);
     this.demoA = this.addDummy(a.x, a.y, new ScriptedController([]), 0.75);
     const A = this.demoA;
     A.look = resolveLook({ skin: 'tangerine', hat: 'none', trail: 'classic' });
     // A walks a loop away from the player, towards B's side
     const ux = Math.cos(Math.atan2(u.y, u.x)), uy = Math.sin(Math.atan2(u.y, u.x));
-    const clampPt = (x, y) => ({ x: Math.max(3, Math.min(this.match.world.size - 3, x)), y: Math.max(3, Math.min(this.match.world.size - 3, y)) });
+    const m = 3 * G, sz = this.match.world.size;
+    const clampPt = (x, y) => ({ x: Math.max(m, Math.min(sz - m, x)), y: Math.max(m, Math.min(sz - m, y)) });
     A.controller.wps = [
-      clampPt(a.x + ux * 6, a.y + uy * 6),
-      clampPt(a.x + ux * 6 + pv.x * 5, a.y + uy * 6 + pv.y * 5),
-      clampPt(a.x + pv.x * 5 - ux * 1, a.y + pv.y * 5 - uy * 1),
+      clampPt(a.x + ux * 6 * G, a.y + uy * 6 * G),
+      clampPt(a.x + (ux * 6 + pv.x * 5) * G, a.y + (uy * 6 + pv.y * 5) * G),
+      clampPt(a.x + (pv.x * 5 - ux) * G, a.y + (pv.y * 5 - uy) * G),
       { x: a.x, y: a.y },
     ];
     this.demoB = this.addDummy(b.x, b.y, new ScriptedController([]), 0.95);
     this.demoB.look = resolveLook({ skin: 'grape', hat: 'none', trail: 'classic' });
-    this.match.cameraTarget = { x: (a.x + b.x) / 2 + ux * 3, y: (a.y + b.y) / 2 + uy * 3 };
+    this.match.cameraTarget = { x: (a.x + b.x) / 2 + ux * 3 * G, y: (a.y + b.y) / 2 + uy * 3 * G };
     this.demoBWait = true;
   }
 
@@ -261,8 +268,8 @@ export class Tutorial {
     for (const d of [this.demoA, this.demoB]) if (d && w.players.includes(d)) w.removePlayer(d);
     this.demoA = this.demoB = null;
     const u = this.roomyDirection();
-    const s = this.freeSpot(h0.x + u.x * 10, h0.y + u.y * 10);
-    const ctrl = new ScriptedController([], { next: (world, p) => loopBeside(world, p, this.human, 7, 5) });
+    const s = this.freeSpot(h0.x + u.x * 10 * G, h0.y + u.y * 10 * G);
+    const ctrl = new ScriptedController([], { next: (world, p) => loopBeside(world, p, this.human) });
     this.prey = this.addDummy(s.x, s.y, ctrl, 0.55);
   }
 
@@ -270,13 +277,22 @@ export class Tutorial {
   update(dt) {
     if (!this.active || !this.match) return;
     this.timer += dt;
+    if (this.step === 2 && this.timer > 14) {
+      // the demo dummies missed each other: don't leave the player waiting
+      this.step = 2.5;
+      this.human.frozen = false;
+      this.human.speedMul = 1;
+      this.match.cameraTarget = null;
+      this.goTo(3);
+      return;
+    }
     const p = this.human;
     if (this.step === 0 && p) {
       if (this.lastPos) this.moved += Math.hypot(p.x - this.lastPos.x, p.y - this.lastPos.y);
       this.lastPos = { x: p.x, y: p.y };
-      if (this.moved > 7 && this.timer > 1.2) this.goTo(1);
+      if (this.moved > 7 * G && this.timer > 1.2) this.goTo(1);
     }
-    if (this.step === 2 && this.demoA && this.demoB && this.demoBWait && this.demoA.trail.length >= 7) {
+    if (this.step === 2 && this.demoA && this.demoB && this.demoBWait && this.demoA.trail.length >= 7 * G) {
       // B goes for the middle of A's trail
       this.demoBWait = false;
       const w = this.match.world.grid.w;
@@ -303,7 +319,7 @@ export class Tutorial {
       if (this.step === 2 && this.match.cameraTarget) c = r.worldToScreen(this.match.cameraTarget.x, this.match.cameraTarget.y);
       this.dim.style.setProperty('--x', `${c.x}px`);
       this.dim.style.setProperty('--y', `${c.y}px`);
-      this.dim.style.setProperty('--r', `${Math.max(140, r.camera.cellPx * (this.step === 2 ? 9 : 6))}px`);
+      this.dim.style.setProperty('--r', `${Math.max(140, r.camera.cellPx * G * (this.step === 2 ? 9 : 6))}px`);
     }
     if (this.step === 3 && this.prey && this.prey.alive) {
       const target = this.prey.trail.length
@@ -337,31 +353,52 @@ export class Tutorial {
     app.endMatch();
     app.showMenu();
     await sleep(500);
+    if (!this.active) return;
+    // a click-catcher under the coach: nothing behind the spotlight can be
+    // pressed until the tour ends (otherwise the menu could change under it)
+    const blocker = h('div.tut-block.interactive');
     const spotEl = h('div.spot');
-    this.layer.append(spotEl);
+    this.layer.append(blocker, spotEl);
     const steps = [
       { el: app.menu.tileShop, text: t('tut.menu.shop'), ic: 'cart' },
       { el: app.menu.rankedCard, text: t('tut.menu.ranked'), ic: 'trophy' },
       { el: app.menu.tilePass, text: t('tut.menu.pass'), ic: 'ticket' },
     ];
-    for (const s of steps) {
-      if (!this.active) return;
-      const r = s.el.getBoundingClientRect();
+    let current = null;
+    const place = () => {
+      if (!current) return;
+      const r = current.getBoundingClientRect();
       Object.assign(spotEl.style, { left: `${r.left - 6}px`, top: `${r.top - 6}px`, width: `${r.width + 12}px`, height: `${r.height + 12}px` });
+      return r;
+    };
+    this.onResize = () => place();
+    window.addEventListener('resize', this.onResize);
+    for (const step of steps) {
+      if (!this.active) return;
+      current = step.el;
+      const r = place();
       await new Promise((resolve) => {
-        this.coach({ title: '', text: s.text, ic: s.ic, bottom: r.top > window.innerHeight / 2 ? false : true, actions: [h('button.btn.small', { text: t('common.next'), on: { click: () => { app.sfx('click'); resolve(); } } })] });
+        this.resolveStep = resolve;
+        this.coach({ title: '', text: step.text, ic: step.ic, bottom: r.top <= window.innerHeight / 2, actions: [h('button.btn.small', { text: t('common.next'), on: { click: () => { app.sfx('click'); resolve(); } } })] });
         this.coachEl.querySelector('h4').remove();
       });
     }
+    current = null;
     spotEl.remove();
     if (!this.active) return;
+    // the starter coins are paid once per save; a replay just says goodbye
+    const rewarded = app.state.tutorialRewarded;
     await new Promise((resolve) => {
+      this.resolveStep = resolve;
+      const button = rewarded
+        ? h('button.btn.green', { text: t('tut.menu.go'), on: { click: () => { app.sfx('click'); resolve(); } } })
+        : h('button.btn.gold', { html: `${coin()} +${ECONOMY.tutorialReward}`, on: { click: (e) => { app.sfx('buy'); app.celebrateAt(e.currentTarget, true); resolve(); } } });
       this.coach({
         title: '',
-        text: t('tut.menu.reward', { n: ECONOMY.tutorialReward }),
-        ic: 'gift',
+        text: rewarded ? t('tut.menu.done') : t('tut.menu.reward', { n: ECONOMY.tutorialReward }),
+        ic: rewarded ? 'flag' : 'gift',
         celebrate: true,
-        actions: [h('button.btn.gold', { html: `${coin()} +${ECONOMY.tutorialReward}`, on: { click: (e) => { app.sfx('buy'); app.celebrateAt(e.currentTarget, true); resolve(); } } })],
+        actions: [button],
       });
       this.coachEl.querySelector('h4').remove();
     });
@@ -370,8 +407,13 @@ export class Tutorial {
 
   cleanupLayer() {
     clearTimeout(this.pending);
+    if (this.onResize) { window.removeEventListener('resize', this.onResize); this.onResize = null; }
     this.layer.replaceChildren();
     this.coachEl = null;
+    // release a tour step that is waiting for "Next" (skip / finish)
+    const r = this.resolveStep;
+    this.resolveStep = null;
+    r?.();
   }
 
   skip() {

@@ -6,27 +6,35 @@ export const DT = 1 / TICK_RATE;
 export const MAX_FRAME_STEPS = 6;       // avoid spiral of death after a long frame
 export const MAX_SLOTS = 32;            // player ids are 1..MAX_SLOTS (0 = nobody)
 
+/**
+ * Territory resolution: grid cells per world unit (a player's head is one unit
+ * wide). A finer grid makes land follow the drawn trail and spawn discs
+ * properly round. All distances below are in cells.
+ */
+export const GRID = 3;
+const U = (units) => units * GRID;
+
 export const GAME = {
-  speed: 5.4,             // cells per second
-  turnRate: 5.4,          // radians per second (turn radius ≈ 1 cell)
-  startRadius: 3.2,       // radius of spawn territory, in cells
+  speed: U(5.4),          // 5.4 units per second
+  turnRate: 5.4,          // radians per second (turn radius ≈ 1 unit)
+  startRadius: U(3.2),    // radius of spawn territory
   bigStartShare: 0.01,    // "Big Start" boost: start with 1% of the map
-  trailPointStep: 0.33,   // polyline resolution of the rendered trail
-  selfGrace: 3,           // own trail cells this recent never kill you
-  headOnDist: 0.85,       // head to head collision distance, cells
+  trailPointStep: U(0.33),// polyline resolution of the rendered trail
+  selfGrace: U(3),        // own trail cells this recent never kill you
+  headOnDist: U(0.85),    // head to head collision distance
+  headSize: U(1.02),      // drawn head size
   speedBoostMul: 2,       // "Speed Rush" doubles the speed
   speedBoostTime: 6,      // seconds
   reviveInvuln: 2.5,      // seconds of protection after "continue"
   respawnDelay: [2.5, 6], // seconds before a dead bot is replaced
   noRespawnAbove: 0.75,   // stop replacing bots once the player owns this share
-  waveSpeed: 26,          // cells per second for capture / transfer waves
+  waveSpeed: U(26),       // capture / transfer waves
+  rankedQuitPenalty: 100, // rank points lost for leaving a ranked match
 };
 
 export const MAPS = {
-  normal: { size: 128, bots: 11 },
-  tutorial: { size: 64, bots: 0 },
-  // ranked maps grow a little with the bot count (see ranked/ranks.js)
-  rankedBase: 120,
+  normal: { size: U(128), bots: 11 },
+  tutorial: { size: U(64), bots: 0 },
 };
 
 export const ECONOMY = {

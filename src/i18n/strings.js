@@ -118,6 +118,7 @@ export const STRINGS = {
     'death.wall': 'You hit the wall',
     'death.head': 'Head-on crash with {name}',
     'death.engulf': '{name} surrounded your land',
+    'death.quit': 'You left the ranked match',
 
     'revive.title': 'Continue?',
     'revive.text': 'Watch a short ad and continue right where you fell. Your land stays yours.',
@@ -157,6 +158,7 @@ export const STRINGS = {
     'rank.dropped': 'You dropped to {rank}',
     'rank.progress': '{rp} / {need} RP',
     'rank.legendRp': '{rp} RP',
+    'rank.abandoned': 'You left a ranked match: −{n} RP',
     'rank.rules': 'Ranked rules: kill a rival to take all of their land. Bots get smarter every rank. Coins ×0.5.',
 
     'rarity.common': 'Common',
@@ -235,6 +237,7 @@ export const STRINGS = {
     'pause.title': 'Paused',
     'pause.resume': 'Resume',
     'pause.quit': 'Leave match',
+    'pause.quitRanked': 'Leave match (−{n} RP)',
 
     'tut.skip': 'Skip tutorial',
     'tut.step': 'Step {n}/{total}',
@@ -253,6 +256,8 @@ export const STRINGS = {
     'tut.menu.ranked': 'Ranked: climb from Bronze to Legend. The winner takes the loser\'s land!',
     'tut.menu.pass': 'Battle Pass: finish daily quests, earn XP and unlock exclusive rewards.',
     'tut.menu.reward': 'Here are {n} coins for your first skin. Have fun!',
+    'tut.menu.done': 'You\'re all set. Have fun!',
+    'tut.menu.go': 'Let\'s go',
     'tut.dummy': 'Dummy',
 
     // ------------------------------------------------------------ items

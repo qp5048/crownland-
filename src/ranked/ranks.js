@@ -1,3 +1,4 @@
+import { GRID } from '../config.js';
 import { clamp, lerp } from '../core/math.js';
 
 /**
@@ -23,13 +24,19 @@ RANKS.push({ key: 'legend', division: 0, color: '#ff3d7f', dark: '#a0174a', ligh
 
 export const LEGEND = RANKS.length - 1;
 
-/** 0..1 difficulty for a rank, eased so early ranks stay friendly. */
+/**
+ * Bot difficulty for a rank. Ranked lobbies are always hard: Bronze already
+ * plays like a strong normal lobby and the top ranks enter the "elite" range
+ * (> 1, see ai/difficulty.js). Smooth curve, no jumps between ranks.
+ */
 export function rankLevel(tier) {
   const x = clamp(tier / LEGEND, 0, 1);
-  return lerp(0.18, 1, x * (0.6 + 0.4 * x));
+  return lerp(0.62, 1.25, Math.pow(x, 0.9));
 }
+/** Ranked bots get slightly quicker towards the top (up to +6%). */
+export const rankBotSpeed = (tier) => 1 + 0.06 * clamp(tier / LEGEND, 0, 1);
 export const rankBotCount = (tier) => Math.round(lerp(10, 15, clamp(tier / LEGEND, 0, 1)));
-export const rankMapSize = (tier) => 112 + rankBotCount(tier) * 2;
+export const rankMapSize = (tier) => (112 + rankBotCount(tier) * 2) * GRID;
 
 /**
  * Rank points for a ranked match.

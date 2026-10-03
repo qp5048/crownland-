@@ -1,4 +1,4 @@
-import { GAME } from '../config.js';
+import { GAME, GRID as G } from '../config.js';
 import { angleDiff, clamp, TAU } from '../core/math.js';
 
 /* ------------------------------------------------------------------ search */
@@ -64,7 +64,7 @@ export class BotController {
     this.decideIn = rng.float(0, profile.reaction);
     this.blindT = 0;
     this.noiseVal = 0;
-    this.trailLimit = 40;
+    this.trailLimit = 40 * G;
     this.near = [];
     this.forceHunt = null; // tutorial / scripted override
   }
@@ -124,7 +124,7 @@ export class BotController {
       if (!this.wps.length) mustReturn = true;
       else if (!mustReturn) {
         const prey = this.findPrey(world, me);
-        if (prey && prey.dist <= 4 && rng.chance(prof.aggression)) {
+        if (prey && prey.dist <= 4 * G && rng.chance(prof.aggression)) {
           this.state = 'hunt'; this.prey = prey;
           return;
         }
@@ -146,7 +146,7 @@ export class BotController {
       g.idx(me.cx, me.cy),
       (i) => g.owner[i] === id,
       (i) => g.trail[i] !== id || g.trailSeq[i] > grace,
-      9000,
+      9000 * G * G,
     );
   }
 
@@ -157,7 +157,7 @@ export class BotController {
       return;
     }
     const g = world.grid;
-    let k = Math.min(4, path.length - 1);
+    let k = Math.min(4 * G, path.length - 1);
     for (; k > 1; k--) {
       const c = path[k];
       if (this.clearLine(world, me, (c % g.w) + 0.5, ((c / g.w) | 0) + 0.5)) break;
@@ -220,10 +220,10 @@ export class BotController {
       const s = e.trail[0];
       const eRet = Math.hypot(e.x - ((s % g.w) + 0.5), e.y - (((s / g.w) | 0) + 0.5));
       const ratio = (me.speed * me.speedMul) / (e.speed * e.speedMul);
-      const feasible = info.defend || info.dist / ratio < eRet + 2 + prof.aggression * 4;
+      const feasible = info.defend || info.dist / ratio < eRet + (2 + prof.aggression * 4) * G;
       if (!feasible) continue;
-      const value = (e.isHuman ? 1 + prof.playerBias * 2 : 1) * (1 + e.trail.length / 25) * (info.defend ? 2.5 : 1);
-      const score = value / (info.dist + 2);
+      const value = (e.isHuman ? 1 + prof.playerBias * 2 : 1) * (1 + e.trail.length / (25 * G)) * (info.defend ? 2.5 : 1);
+      const score = value / (info.dist + 2 * G);
       if (score > bestScore) { bestScore = score; best = info; }
     }
     return best;
@@ -235,7 +235,7 @@ export class BotController {
     for (const c of e.trail) {
       const d = Math.hypot(me.x - ((c % w) + 0.5), me.y - (((c / w) | 0) + 0.5));
       if (d < dist) { dist = d; cell = c; }
-      if (g.owner[c] === me.id && d < 14) defend = true;
+      if (g.owner[c] === me.id && d < 14 * G) defend = true;
     }
     return { player: e, cell, dist, defend: defend || forced };
   }
@@ -259,7 +259,7 @@ export class BotController {
     for (const e of world.players) {
       if (e !== me && e.alive) nearEnemy = Math.min(nearEnemy, Math.hypot(e.x - me.x, e.y - me.y));
     }
-    const safety = clamp(nearEnemy / 18, 0.45, 1);
+    const safety = clamp(nearEnemy / (18 * G), 0.45, 1);
     const share = g.counts[me.id] / g.n;
     const sizeBoost = 1 + Math.min(0.6, share * 4);
     let best = null, bestScore = -Infinity;
@@ -271,12 +271,12 @@ export class BotController {
       const cand = this.makeLoop(world, me, ex.x, ex.y, th, safety * sizeBoost);
       if (!cand) continue;
       const turn = Math.abs(angleDiff(me.angle, th));
-      const score = cand.value / (cand.len + ex.d * 0.6 + 4) - turn * 0.25 + rng.float(0, 0.35);
+      const score = cand.value / ((cand.len + ex.d * 0.6) / G + 4) - turn * 0.25 + rng.float(0, 0.35);
       if (score > bestScore) { bestScore = score; best = cand; }
     }
     if (!best) {
       // deep inside a large territory: head for the nearest border first
-      const path = bfs(g, g.idx(me.cx, me.cy), (i) => g.owner[i] !== me.id, () => true, 30000);
+      const path = bfs(g, g.idx(me.cx, me.cy), (i) => g.owner[i] !== me.id, () => true, 30000 * G * G);
       if (path) {
         const c = path[path.length - 1];
         const x = (c % g.w) + 0.5, y = ((c / g.w) | 0) + 0.5;
@@ -285,15 +285,15 @@ export class BotController {
       }
     }
     this.wps = best ? best.wps : [];
-    const len = best ? best.len : 20;
-    this.trailLimit = Math.round(len * 1.9 + 10);
+    const len = best ? best.len : 20 * G;
+    this.trailLimit = Math.round(len * 1.9 + 10 * G);
   }
 
   exitAlong(world, me, th) {
     const g = world.grid;
     const dx = Math.cos(th) * 0.5, dy = Math.sin(th) * 0.5;
     let x = me.x, y = me.y;
-    for (let d = 0; d < 34; d += 0.5) {
+    for (let d = 0; d < 34 * G; d += 0.5) {
       const cx = Math.floor(x), cy = Math.floor(y);
       if (!g.inside(cx, cy)) return null;
       if (g.owner[g.idx(cx, cy)] !== me.id) return { x, y, d };
@@ -307,10 +307,11 @@ export class BotController {
     const prof = this.prof;
     const size = world.size;
     const dx = Math.cos(th), dy = Math.sin(th);
-    let L = rng.float(4, 9) * prof.loopScale * scale;
-    let W = rng.float(3, 8) * prof.loopScale * scale;
+    let L = rng.float(4, 9) * G * prof.loopScale * scale;
+    let W = rng.float(3, 8) * G * prof.loopScale * scale;
     const sides = rng.chance(0.5) ? [1, -1] : [-1, 1];
-    const ok = (x, y) => x > 2.5 && y > 2.5 && x < size - 2.5 && y < size - 2.5;
+    const m = 2.5 * G;
+    const ok = (x, y) => x > m && y > m && x < size - m && y < size - m;
     for (let attempt = 0; attempt < 3; attempt++) {
       for (const s of sides) {
         const px = -dy * s, py = dx * s;
@@ -320,8 +321,8 @@ export class BotController {
         // value = cells we don't own inside the rectangle (enemy land is juicier)
         const g = world.grid;
         let value = 0;
-        for (let u = 0.5; u < L; u += 1.5) {
-          for (let v = 0.5; v < W; v += 1.5) {
+        for (let u = 0.5 * G; u < L; u += 1.5 * G) {
+          for (let v = 0.5 * G; v < W; v += 1.5 * G) {
             const cx = Math.floor(ex + dx * u + px * v), cy = Math.floor(ey + dy * u + py * v);
             if (!g.inside(cx, cy)) continue;
             const o = g.owner[g.idx(cx, cy)];
@@ -329,12 +330,12 @@ export class BotController {
             value += o ? (prof.personality === 'greedy' ? 1.7 : 1.3) : 1;
           }
         }
-        value *= 2.25; // each sample stands for 1.5 × 1.5 cells
+        value *= 2.25; // each sample stands for 1.5 × 1.5 units (value is in unit²)
         // keep clear of other players' heads near the far corners
         for (const e of world.players) {
           if (e === me || !e.alive) continue;
           const d = Math.min(Math.hypot(e.x - w1.x, e.y - w1.y), Math.hypot(e.x - w2.x, e.y - w2.y));
-          if (d < 8) value -= (8 - d) * 3;
+          if (d < 8 * G) value -= ((8 * G - d) / G) * 3;
         }
         return { wps: [w1, w2], len: 2 * (L + W), value };
       }
@@ -355,7 +356,7 @@ export class BotController {
       else return me.angle;
     } else if (this.wps.length) {
       const wp = this.wps[0];
-      if (Math.hypot(wp.x - me.x, wp.y - me.y) < 1.3) {
+      if (Math.hypot(wp.x - me.x, wp.y - me.y) < 1.3 * G) {
         this.wps.shift();
         if (!this.wps.length && me.trail.length) { this.state = 'return'; this.decideIn = 0; }
         return me.angle;
@@ -364,7 +365,7 @@ export class BotController {
     } else {
       return me.angle;
     }
-    if (this.state === 'return' && this.goal && Math.hypot(tx - me.x, ty - me.y) < 0.6) this.decideIn = 0;
+    if (this.state === 'return' && this.goal && Math.hypot(tx - me.x, ty - me.y) < 0.6 * G) this.decideIn = 0;
     return Math.atan2(ty - me.y, tx - me.x) + this.noiseVal;
   }
 
@@ -374,7 +375,7 @@ export class BotController {
     near.length = 0;
     if (me.trail.length) {
       for (const e of world.players) {
-        if (e !== me && e.alive && Math.abs(e.x - me.x) < 7 && Math.abs(e.y - me.y) < 7) near.push(e);
+        if (e !== me && e.alive && Math.abs(e.x - me.x) < 7 * G && Math.abs(e.y - me.y) < 7 * G) near.push(e);
       }
     }
     const t0 = this.ttc(world, me, want);
@@ -394,9 +395,9 @@ export class BotController {
   /** Time until the simulated arc towards angle `a` hits something (Infinity = clear). */
   ttc(world, me, a) {
     const g = world.grid;
-    const step = 0.05;
-    const T = this.prof.lookahead;
     const sp = me.speed * me.speedMul;
+    const step = Math.min(0.05, 0.45 / sp); // samples ≤ ~0.45 cells apart
+    const T = this.prof.lookahead;
     const maxTurn = GAME.turnRate * step;
     const size = world.size;
     const grace = me.trail.length - 1 - GAME.selfGrace - 1;
@@ -405,7 +406,8 @@ export class BotController {
       ang += clamp(angleDiff(ang, a), -maxTurn, maxTurn);
       x += Math.cos(ang) * sp * step;
       y += Math.sin(ang) * sp * step;
-      if (x < 0.7 || y < 0.7 || x > size - 0.7 || y > size - 0.7) return t;
+      const wm = 0.7 * G;
+      if (x < wm || y < wm || x > size - wm || y > size - wm) return t;
       // test a small box around the head, not just the centre cell: the real
       // head enters every cell its path grazes, including corners
       for (let c = 0; c < 4; c++) {
@@ -414,7 +416,7 @@ export class BotController {
       }
       for (const e of this.near) {
         const ddx = e.x - x, ddy = e.y - y;
-        if (ddx * ddx + ddy * ddy < 1.6) return t;
+        if (ddx * ddx + ddy * ddy < 1.6 * G * G) return t;
       }
     }
     return Infinity;
