@@ -289,14 +289,14 @@ export class Renderer {
     const X = p.rx * s + offX, Y = p.ry * s + offY;
     const size = s * 1.02;
     let alpha = 1;
-    if (p.invuln > 0) alpha = 0.45 + 0.35 * Math.sin(t * 22);
+    if (p.invuln > 0 && p.invuln < 30) alpha = 0.45 + 0.35 * Math.sin(t * 22);
     const lowQ = this.quality === 'low';
     drawHead(ctx, p.look.skin, X, Y, size, p.angle, t, { alpha, glow: !lowQ, seed: p.id });
     ctx.save();
     ctx.globalAlpha = alpha;
     drawHat(ctx, p.look.hat, X, Y, size, t);
     ctx.restore();
-    if (p.shield > 0 || p.invuln > 0) {
+    if (p.shield > 0 || (p.invuln > 0 && p.invuln < 30)) {
       ctx.save();
       const r = size * (0.92 + 0.05 * Math.sin(t * 5));
       const g = ctx.createRadialGradient(X, Y, r * 0.55, X, Y, r);

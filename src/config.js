@@ -9,7 +9,7 @@ export const MAX_SLOTS = 32;            // player ids are 1..MAX_SLOTS (0 = nobo
 export const GAME = {
   speed: 7,               // cells per second
   turnRate: 6.2,          // radians per second (turn radius ≈ 1.13 cells)
-  startRadius: 2.6,       // radius of spawn territory, in cells
+  startRadius: 3.0,       // radius of spawn territory, in cells
   bigStartRadius: 4.2,    // with the "Big Start" boost
   trailPointStep: 0.33,   // polyline resolution of the rendered trail
   selfGrace: 3,           // own trail cells this recent never kill you
@@ -24,7 +24,7 @@ export const GAME = {
 
 export const MAPS = {
   normal: { size: 128, bots: 11 },
-  tutorial: { size: 44, bots: 0 },
+  tutorial: { size: 64, bots: 0 },
   // ranked maps grow a little with the bot count (see ranked/ranks.js)
   rankedBase: 120,
 };
