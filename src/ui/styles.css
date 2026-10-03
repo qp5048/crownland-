@@ -456,12 +456,12 @@ input { -webkit-user-select: text; user-select: text; }
 @media (hover: hover) { .item:hover { transform: translateY(-3px); } }
 .item:active { transform: translateY(2px) scale(0.98); }
 .item.sel { border-color: var(--ink); }
-.item canvas { width: 84px; height: 84px; }
+.item canvas { width: 84px; height: 84px; flex: none; }
 .item .nm { font-size: 13px; font-weight: 800; text-align: center; line-height: 1.15; min-height: 30px; display: flex; align-items: center; }
 .item .pr { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 14px; color: #8a5a00; }
 .item .pr .coin { width: 17px; height: 17px; }
 .item .pr.cant { color: var(--red-d); }
-.item .st { font-size: 12px; font-weight: 800; color: var(--green-d); display: inline-flex; align-items: center; gap: 3px; }
+.item .st { font-size: 12px; font-weight: 800; color: var(--green-d); display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .item .st .ic { width: 15px; height: 15px; }
 .item .st.eq { color: var(--blue); }
 .item .st.pass { color: var(--gold-d); }
@@ -519,7 +519,7 @@ input { -webkit-user-select: text; user-select: text; }
   box-shadow: 0 4px 0 #d3dee9; text-align: center; font-size: 12px; font-weight: 800;
   transition: transform 0.25s var(--spring);
 }
-.reward canvas { width: 58px; height: 58px; }
+.reward canvas { width: 58px; height: 58px; flex: none; }
 .reward .rw-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: #fff4d1; color: var(--gold-d); }
 .reward .rw-ic .coin { width: 32px; height: 32px; }
 .reward .rw-ic .ic { width: 28px; height: 28px; }
@@ -648,7 +648,7 @@ input { -webkit-user-select: text; user-select: text; }
   .sp-name { font-size: 18px; }
   .sp-actions { flex-direction: column; }
   .items { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; }
-  .item canvas { width: 64px; height: 64px; }
+  .item canvas { width: 64px; height: 64px; flex: none; }
   .pass-top { grid-template-columns: 1fr; }
   .prem-card { width: auto; }
   .stats { grid-template-columns: repeat(2, 1fr); }
