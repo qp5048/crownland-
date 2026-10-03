@@ -68,6 +68,7 @@ export const STRINGS = {
     'toast.passLevel': 'Battle Pass level {n}!',
     'toast.boostArmed': '{name} ready for the next match',
     'toast.revived': 'Back in the game!',
+    'toast.autoLow': 'Graphics switched to Fast for smoother play',
 
     'death.cut': '{name} cut your trail',
     'death.self': 'You crossed your own trail',
@@ -302,6 +303,7 @@ export const STRINGS = {
     'toast.passLevel': 'Уровень пропуска {n}!',
     'toast.boostArmed': '{name} готов к следующему матчу',
     'toast.revived': 'Снова в игре!',
+    'toast.autoLow': 'Графика переключена на «Быструю» для плавности',
 
     'death.cut': '{name} перерезал твой след',
     'death.self': 'Ты пересёк свой след',

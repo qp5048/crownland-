@@ -1,4 +1,4 @@
-import { GAME, MAPS } from '../config.js';
+import { ECONOMY, GAME, MAPS } from '../config.js';
 import { Emitter } from '../core/emitter.js';
 import { clamp } from '../core/math.js';
 import { Rng } from '../core/rng.js';
@@ -149,7 +149,8 @@ export class Match extends Emitter {
       if (killer && killer === this.human) {
         this.audio?.play('kill');
         this.renderer.camera.shake(7);
-        this.renderer.floatText(victim.x, victim.y - 0.5, '✕', '#ff4d5e', 1.4);
+        const coins = Math.round(ECONOMY.coinsPerKill * (this.ranked ? ECONOMY.rankedMultiplier : 1) * (this.boosts.magnet ? ECONOMY.magnetMultiplier : 1));
+        this.renderer.floatText(victim.x, victim.y - 0.5, `+${coins}`, '#ffd23f', 1.3, true);
         this.emit('feed', { kind: 'kill', name: victim.name });
       } else if (visible) {
         this.audio?.play('enemyDeath');

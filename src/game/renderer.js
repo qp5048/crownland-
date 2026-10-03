@@ -75,9 +75,9 @@ export class Renderer {
     return { x: ((x - c.x) * s + this.w / 2 + c.shakeX * this.dpr) / this.dpr, y: ((y - c.y) * s + this.h / 2 + c.shakeY * this.dpr) / this.dpr };
   }
 
-  floatText(x, y, text, color = '#ffffff', size = 1) {
+  floatText(x, y, text, color = '#ffffff', size = 1, coin = false) {
     if (this.floaters.length > 30) this.floaters.shift();
-    this.floaters.push({ x, y, text, color, size, t: 0, life: 1.3 });
+    this.floaters.push({ x, y, text, color, size, coin, t: 0, life: 1.3 });
   }
 
   // -------------------------------------------------------------------- frame
@@ -101,26 +101,22 @@ export class Renderer {
     const SX = (x) => Math.round(x * s + offX);
     const SY = (y) => Math.round(y * s + offY);
 
-    // ---- background
+    // ---- background: only paint the outside-of-map area when it is on screen
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#c9d7e4';
-    ctx.fillRect(0, 0, W, H);
     const mx0 = SX(0), my0 = SY(0), mx1 = SX(grid.w), my1 = SY(grid.h);
-    // outside-the-map hatching
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = Math.max(1, s * 0.12);
-    ctx.beginPath();
-    const step = s * 1.6;
-    const ph = ((cam.x + cam.y) * s) % step;
-    for (let k = -H; k < W + H; k += step) { ctx.moveTo(k - ph, 0); ctx.lineTo(k - ph + H, H); }
-    ctx.stroke();
-    ctx.restore();
-    // board
-    ctx.fillStyle = 'rgba(40,70,110,0.18)';
-    ctx.fillRect(mx0 - s * 0.15, my0 + s * 0.25, mx1 - mx0 + s * 0.3, my1 - my0 + s * 0.15);
+    if (mx0 > 0 || my0 > 0 || mx1 < W || my1 < H) {
+      ctx.fillStyle = this.hatchPattern(s);
+      const tile = this.hatchTile;
+      const ox = ((offX % tile) + tile) % tile, oy = ((offY % tile) + tile) % tile;
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.fillRect(-ox, -oy, W, H);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(40,70,110,0.18)';
+      ctx.fillRect(mx0 - s * 0.15, my0 + s * 0.25, mx1 - mx0 + s * 0.3, my1 - my0 + s * 0.15);
+    }
     ctx.fillStyle = '#f4f8fb';
-    ctx.fillRect(mx0, my0, mx1 - mx0, my1 - my0);
+    ctx.fillRect(Math.max(0, mx0), Math.max(0, my0), Math.min(W, mx1) - Math.max(0, mx0), Math.min(H, my1) - Math.max(0, my0));
 
     const x0 = clamp(Math.floor(cam.x - W / 2 / s) - 1, 0, grid.w - 1);
     const x1 = clamp(Math.ceil(cam.x + W / 2 / s) + 1, 0, grid.w - 1);
@@ -196,6 +192,26 @@ export class Renderer {
       ctx.fillStyle = '#ffffff';
       ctx.fillText(p.name, X, Y);
     }
+  }
+
+  /** Diagonal hatching for the out-of-bounds area, cached per scale. */
+  hatchPattern(s) {
+    const tile = Math.max(8, Math.round(s * 1.6));
+    if (this.hatchTile !== tile || !this.hatch) {
+      const c = document.createElement('canvas');
+      c.width = c.height = tile;
+      const g = c.getContext('2d');
+      g.fillStyle = '#c9d7e4';
+      g.fillRect(0, 0, tile, tile);
+      g.strokeStyle = 'rgba(255,255,255,0.22)';
+      g.lineWidth = Math.max(1, s * 0.12);
+      g.beginPath();
+      for (let k = -1; k <= 1; k++) { g.moveTo(k * tile, 0); g.lineTo(k * tile + tile, tile); }
+      g.stroke();
+      this.hatch = this.ctx.createPattern(c, 'repeat');
+      this.hatchTile = tile;
+    }
+    return this.hatch;
   }
 
   drawTerritory(ctx, grid, t, x0, x1, y0, y1, SX, SY, s, pal) {
@@ -326,9 +342,25 @@ export class Renderer {
       ctx.lineWidth = fs * 0.22;
       ctx.lineJoin = 'round';
       ctx.strokeStyle = 'rgba(25,35,60,0.6)';
-      ctx.strokeText(f.text, X, Y);
+      let tx = X;
+      if (f.coin) {
+        // a little vector coin in front of the amount
+        const tw = ctx.measureText(f.text).width;
+        const r = fs * 0.42;
+        tx = X + r + fs * 0.08;
+        const cx = X - tw / 2 - fs * 0.05 + r * 0.1, cy = Y;
+        ctx.fillStyle = '#d98a00';
+        ctx.beginPath(); ctx.arc(cx, cy + r * 0.14, r, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffc21a';
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = r * 0.18;
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.68, 0, TAU); ctx.stroke();
+        ctx.lineWidth = fs * 0.22;
+        ctx.strokeStyle = 'rgba(25,35,60,0.6)';
+      }
+      ctx.strokeText(f.text, tx, Y);
       ctx.fillStyle = f.color;
-      ctx.fillText(f.text, X, Y);
+      ctx.fillText(f.text, tx, Y);
       ctx.globalAlpha = 1;
     }
   }

@@ -62,7 +62,8 @@ export class Tutorial {
     this.dim = h('div.tut-dim');
     this.pointer = h('div.pointer.anim', { html: icon(app.input.isTouchDevice ? 'hand' : 'cursor') });
     this.ring = h('div.tut-ring.hidden');
-    this.layer.replaceChildren(this.dim, this.ring, this.pointer);
+    this.edgeArrow = h('div.tut-arrow.hidden', { html: icon('chevron') });
+    this.layer.replaceChildren(this.dim, this.ring, this.pointer, this.edgeArrow);
     this.pointer.classList.add('hidden');
   }
 
@@ -87,6 +88,7 @@ export class Tutorial {
     const touch = app.input.isTouchDevice;
     this.pointer.classList.add('hidden');
     this.ring.classList.add('hidden');
+    this.edgeArrow.classList.add('hidden');
     this.dim.classList.remove('on');
     if (step === 0) {
       this.coach({ title: t('tut.move.title'), text: touch ? t('tut.move.touch') : t('tut.move.desktop'), ic: touch ? 'hand' : 'cursor' });
@@ -235,9 +237,25 @@ export class Tutorial {
       const target = this.prey.trail.length
         ? (() => { const w = this.match.world.grid.w; const c = this.prey.trail[Math.floor(this.prey.trail.length / 2)]; return r.worldToScreen((c % w) + 0.5, ((c / w) | 0) + 0.5); })()
         : r.worldToScreen(this.prey.rx ?? this.prey.x, this.prey.ry ?? this.prey.y);
-      this.ring.style.left = `${target.x}px`;
-      this.ring.style.top = `${target.y}px`;
-      this.pointer.style.transform = `translate(${target.x + 18}px, ${target.y + 14}px)`;
+      const vw = window.innerWidth, vh = window.innerHeight, m = 56;
+      const off = target.x < m || target.y < m || target.x > vw - m || target.y > vh - m;
+      this.ring.classList.toggle('hidden', off);
+      this.pointer.classList.toggle('hidden', off);
+      this.edgeArrow.classList.toggle('hidden', !off);
+      if (off) {
+        // clamp an arrow to the screen edge, pointing at the dummy
+        const cx = vw / 2, cy = vh / 2;
+        const dx = target.x - cx, dy = target.y - cy;
+        const k = Math.min((vw / 2 - m) / Math.abs(dx || 1e-6), (vh / 2 - m) / Math.abs(dy || 1e-6));
+        const ax = cx + dx * k, ay = cy + dy * k;
+        this.edgeArrow.style.transform = `translate(${ax - 28}px, ${ay - 28}px) rotate(${Math.atan2(dy, dx)}rad)`;
+      } else {
+        this.ring.style.left = `${target.x}px`;
+        this.ring.style.top = `${target.y}px`;
+        this.pointer.style.transform = `translate(${target.x + 18}px, ${target.y + 14}px)`;
+      }
+    } else if (this.edgeArrow) {
+      this.edgeArrow.classList.add('hidden');
     }
   }
 

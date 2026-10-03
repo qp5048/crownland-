@@ -559,7 +559,20 @@ export class App {
     }
   }
 
+  /** Drop to the fast renderer once if a match keeps running well below 60 FPS. */
+  watchPerformance(frameDt) {
+    if (this.autoLowDone || this.state.settings.quality !== 'high' || !this.match || this.loop.simPaused) { this.slowTime = 0; return; }
+    if (frameDt > 1 / 38) this.slowTime = (this.slowTime || 0) + frameDt;
+    else this.slowTime = Math.max(0, (this.slowTime || 0) - frameDt * 0.5);
+    if (this.slowTime > 4) {
+      this.autoLowDone = true;
+      this.setQuality('low');
+      this.toast(`${icon('bolt')}${t('toast.autoLow')}`);
+    }
+  }
+
   render(alpha, frameDt) {
+    this.watchPerformance(frameDt);
     if (this.match) {
       this.match.frame(alpha, frameDt);
       this.hud.update(frameDt);
