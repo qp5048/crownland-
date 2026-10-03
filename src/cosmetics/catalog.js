@@ -6,6 +6,7 @@
  *   solid · stripes · dots · checker · gradient · radial · split
  *   shift (animated gradient) · pulse (breathing glow) · waves · grid · swirl
  *   glow  (legendary: glow + particles)  · prism · galaxy · phoenix · aurora · dragon
+ *   character styles (cat, robot, ghost, …) live in cosmetics/characters.js
  */
 
 export const RARITIES = {
@@ -67,6 +68,29 @@ export const SKINS = [
   S('galaxy', 'mythic', 9000, 'galaxy', ['#120a35', '#6d3bff', '#ff4fd8'], { fx: 'star' }),
   S('phoenix', 'mythic', 10500, 'phoenix', ['#ff3b1f', '#ffb21a', '#fff3a0'], { fx: 'fire' }),
   S('aurora', 'mythic', 12000, 'aurora', ['#0b1f3a', '#2bffb4', '#7a5cff'], { fx: 'rainbow' }),
+  // Characters (rare): animals with ears, snouts and little animations
+  S('pig', 'rare', 340, 'pig', ['#ffb3c7', '#ff8fab', '#c94f72']),
+  S('bear', 'rare', 340, 'bear', ['#a0693f', '#e7c39b', '#3b2416']),
+  S('cat', 'rare', 360, 'cat', ['#ff9f43', '#d9701a', '#fff1e0']),
+  S('fox', 'rare', 380, 'fox', ['#ff7b2e', '#ffffff', '#2b2b38']),
+  S('penguin', 'rare', 400, 'penguin', ['#2b3150', '#ffffff', '#ffad33']),
+  S('frog', 'rare', 420, 'frog', ['#5fd068', '#3a9e48', '#ff7aa8']),
+  S('donut', 'rare', 460, 'donut', ['#e9b877', '#ff7eb6', '#ffd23f']),
+  // Animated (epic)
+  S('pumpkin', 'epic', 950, 'pumpkin', ['#ff8c1a', '#c45a00', '#ffd23f']),
+  S('slime', 'epic', 1000, 'slime', ['#4fe08a', '#16924d', '#c8ffd9'], { shape: 'slime' }),
+  S('ghost', 'epic', 1100, 'ghost', ['#f7f4ff', '#c9b8ff'], { shape: 'ghost', bob: true, fx: 'ghost' }),
+  S('robot', 'epic', 1200, 'robot', ['#b4c0cf', '#5d6b7e', '#29e0ff']),
+  S('disco', 'epic', 1400, 'disco', ['#c9d3e0', '#ffffff', '#b07cff']),
+  // Animated (legendary)
+  S('alien', 'legendary', 3000, 'alien', ['#8dff6a', '#2bbf4a', '#101418'], { fx: 'alien' }),
+  S('lava', 'legendary', 3400, 'lava', ['#3a2622', '#ff5a1f', '#ffd23f'], { fx: 'fire' }),
+  S('matrix', 'legendary', 3600, 'matrix', ['#06140b', '#2bff6a'], { fx: 'matrix' }),
+  S('unicorn', 'legendary', 3800, 'unicorn', ['#fff6fb', '#ff9ecf', '#9be7ff'], { fx: 'rainbow' }),
+  // Animated (mythic)
+  S('hologram', 'mythic', 9500, 'hologram', ['#29e7ff', '#ff4fd8', '#ffffff'], { fx: 'spark' }),
+  S('blackhole', 'mythic', 11000, 'blackhole', ['#05030a', '#ff8a3d', '#8b5cf6'], { fx: 'star' }),
+  S('supernova', 'mythic', 11500, 'supernova', ['#fff6c4', '#ff6b3d', '#ff3df2'], { fx: 'nova' }),
   // Battle Pass exclusives
   S('seasonstar', 'epic', null, 'shift', ['#ffd23f', '#ff6b9d', '#6b8bff'], { pass: true }),
   S('velvet', 'legendary', null, 'glow', ['#b0103a', '#ffcf5a'], { fx: 'gold', pass: true }),

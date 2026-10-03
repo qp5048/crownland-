@@ -76,7 +76,8 @@ export class Match extends Emitter {
     this.world = new World({ size, transferOnKill: this.ranked });
 
     if (mode !== 'demo') {
-      const radius = boosts.bigStart ? GAME.bigStartRadius : GAME.startRadius;
+      // Big Start: a disc whose area is exactly bigStartShare of the map
+      const radius = boosts.bigStart ? Math.sqrt((GAME.bigStartShare * size * size) / Math.PI) : GAME.startRadius;
       const spawn = mode === 'tutorial'
         ? { x: size / 2, y: size / 2, radius: 3.2, angle: 0 }
         : { x: size / 2 + this.rng.float(-size * 0.2, size * 0.2), y: size / 2 + this.rng.float(-size * 0.2, size * 0.2), radius };

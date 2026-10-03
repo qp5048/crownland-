@@ -104,3 +104,14 @@ test('catalog sanity: 40+ skins, prices rise with rarity, unique ids', () => {
     }
   }
 });
+
+test('every skin has a name-able style and a price that fits its rarity tier', async () => {
+  const { CHARACTERS } = await import('../src/cosmetics/characters.js');
+  const { STRINGS } = await import('../src/i18n/strings.js');
+  const known = new Set(['solid', 'stripes', 'dots', 'checker', 'gradient', 'radial', 'split', 'shift', 'waves', 'swirl', 'pulse', 'grid', 'glow', 'prism', 'galaxy', 'phoenix', 'aurora', 'dragon', ...Object.keys(CHARACTERS)]);
+  for (const sk of SKINS) {
+    assert.ok(known.has(sk.style), `${sk.id} style ${sk.style}`);
+    assert.ok(STRINGS.en[`item.${sk.id}`], `${sk.id} has a name`);
+  }
+  assert.ok(SKINS.length >= 60);
+});

@@ -1,5 +1,9 @@
 import { TAU, hexToRgb, rgba, shade } from '../core/math.js';
 import { starPath } from '../game/particles.js';
+import { CHARACTERS } from './characters.js';
+import { drawEyes, headPath, rrect } from './shapes.js';
+
+export { rrect };
 
 /* -------------------------------------------------------------- palettes */
 
@@ -34,114 +38,92 @@ export function skinPalette(skin) {
   return p;
 }
 
-export function rrect(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-const GLOWY = new Set(['glow', 'pulse', 'prism', 'galaxy', 'phoenix', 'aurora', 'dragon', 'grid']);
+const GLOWY = new Set(['glow', 'pulse', 'prism', 'galaxy', 'phoenix', 'aurora', 'dragon', 'grid', 'hologram', 'blackhole', 'supernova', 'lava', 'disco']);
 
 /* ------------------------------------------------------------------ heads */
 
 /**
  * Draw a player head centred at (x, y) with side length s (pixels).
- * opts: { eyes = true, glow = true, alpha = 1, seed = 0, blinkSeed }
+ * opts: { eyes = true, glow = true, alpha = 1, seed = 0 }
  */
 export function drawHead(ctx, skin, x, y, s, angle, t, opts = {}) {
   const pal = skinPalette(skin);
+  const ch = CHARACTERS[skin.style];
+  const seed = opts.seed || 0;
   const half = s / 2;
-  const r = s * 0.26;
   const depth = s * 0.15;
+  // floating characters bob up and down
+  const bob = skin.bob ? Math.sin(t * 2.6 + seed) * s * 0.07 : 0;
   ctx.save();
   if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
+  const baseAlpha = ctx.globalAlpha;
 
-  // soft contact shadow
+  // soft contact shadow (shrinks while floating)
   ctx.fillStyle = 'rgba(20,40,70,0.16)';
   ctx.beginPath();
-  ctx.ellipse(x, y + half + depth * 0.9, s * 0.52, s * 0.16, 0, 0, TAU);
+  ctx.ellipse(x, y + half + depth * 0.9, s * (0.52 - (skin.bob ? 0.08 + bob / s : 0)), s * 0.15, 0, 0, TAU);
   ctx.fill();
+  y += bob;
+
+  ch?.back?.(ctx, skin, x, y, s, t, angle);
 
   // extruded side
   ctx.fillStyle = pal.headDark;
-  rrect(ctx, x - half, y - half + depth, s, s, r);
+  headPath(ctx, skin, x, y + depth, s, t);
   ctx.fill();
 
   // outer glow for flashy styles
   if (opts.glow !== false && GLOWY.has(skin.style)) {
     ctx.save();
-    ctx.shadowColor = skin.style === 'prism' ? `hsl(${(t * 90) % 360},100%,60%)` : pal.glow;
+    ctx.shadowColor = skin.style === 'prism' || skin.style === 'disco' ? `hsl(${(t * 90) % 360},100%,60%)` : pal.glow;
     ctx.shadowBlur = s * (0.45 + 0.2 * Math.sin(t * 3));
     ctx.fillStyle = pal.main;
-    rrect(ctx, x - half, y - half, s, s, r);
+    headPath(ctx, skin, x, y, s, t);
     ctx.fill();
     ctx.restore();
   }
 
-  // top face with pattern
+  // top face
   ctx.save();
-  rrect(ctx, x - half, y - half, s, s, r);
+  headPath(ctx, skin, x, y, s, t);
   ctx.clip();
-  paintPattern(ctx, skin, x - half, y - half, s, t);
-  if (skin.rarity === 'legendary' || skin.rarity === 'mythic') shimmer(ctx, x - half, y - half, s, t, opts.seed || 0);
-  // gloss
-  const gl = ctx.createLinearGradient(0, y - half, 0, y + half);
-  gl.addColorStop(0, 'rgba(255,255,255,0.32)');
-  gl.addColorStop(0.45, 'rgba(255,255,255,0.04)');
-  gl.addColorStop(1, 'rgba(0,0,0,0.08)');
-  ctx.fillStyle = gl;
+  if (ch?.paint) ch.paint(ctx, skin, x - half, y - half, s, t);
+  else paintPattern(ctx, skin, x - half, y - half, s, t);
+  if (skin.rarity === 'legendary' || skin.rarity === 'mythic') shimmer(ctx, x - half, y - half, s, t, seed);
+  // candy gloss: soft highlight top-left, gentle shade at the bottom
+  const hl = ctx.createRadialGradient(x - s * 0.22, y - s * 0.28, 0, x - s * 0.22, y - s * 0.28, s * 0.55);
+  hl.addColorStop(0, 'rgba(255,255,255,0.34)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl;
   ctx.fillRect(x - half, y - half, s, s);
+  const sh = ctx.createLinearGradient(0, y + half - s * 0.3, 0, y + half);
+  sh.addColorStop(0, 'rgba(0,0,0,0)');
+  sh.addColorStop(1, 'rgba(0,0,0,0.16)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(x - half, y - half, s, s);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  rrect(ctx, x - s * 0.33, y - s * 0.4, s * 0.2, s * 0.07, s * 0.035);
+  ctx.fill();
   ctx.restore();
 
   // crisp rim
-  ctx.lineWidth = Math.max(1, s * 0.045);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  rrect(ctx, x - half + s * 0.04, y - half + s * 0.04, s - s * 0.08, s - s * 0.08, r * 0.8);
-  ctx.globalAlpha *= 0.5;
-  ctx.stroke();
-  ctx.globalAlpha = opts.alpha ?? 1;
-
-  if (opts.eyes !== false) drawEyes(ctx, x, y, s, angle, t, opts.seed || 0);
+  ctx.lineWidth = Math.max(1, s * 0.04);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.globalAlpha = baseAlpha * 0.55;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(0.92, 0.92);
+  headPath(ctx, skin, 0, 0, s, t);
   ctx.restore();
-}
+  ctx.stroke();
+  ctx.globalAlpha = baseAlpha;
 
-function drawEyes(ctx, x, y, s, angle, t, seed) {
-  const dx = Math.cos(angle), dy = Math.sin(angle);
-  const er = s * 0.12;
-  const sep = s * 0.19;
-  const ox = dx * s * 0.07, oy = dy * s * 0.05 - s * 0.04;
-  const blinkPhase = (t + seed * 1.7) % 4.3;
-  const blink = blinkPhase < 0.13;
-  for (const side of [-1, 1]) {
-    const ex = x + side * sep + ox, ey = y + oy;
-    if (blink) {
-      ctx.strokeStyle = '#1f2540';
-      ctx.lineWidth = Math.max(1, s * 0.05);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(ex - er * 0.8, ey);
-      ctx.lineTo(ex + er * 0.8, ey);
-      ctx.stroke();
-      continue;
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(ex, ey, er, er * 1.18, 0, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#1f2540';
-    ctx.beginPath();
-    ctx.arc(ex + dx * er * 0.42, ey + dy * er * 0.42, er * 0.58, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(ex + dx * er * 0.42 - er * 0.22, ey + dy * er * 0.42 - er * 0.25, er * 0.2, 0, TAU);
-    ctx.fill();
+  if (opts.eyes !== false) {
+    if (ch?.face) ch.face(ctx, skin, x, y, s, angle, t, seed);
+    else drawEyes(ctx, x, y, s, angle, t, seed);
   }
+  ch?.front?.(ctx, skin, x, y, s, t, angle);
+  ctx.restore();
 }
 
 function shimmer(ctx, X, Y, s, t, seed) {
@@ -288,6 +270,7 @@ function paintPattern(ctx, skin, X, Y, s, t) {
       rg.addColorStop(0, `rgba(255,255,255,${0.3 + 0.15 * Math.sin(t * 3)})`);
       rg.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = rg; ctx.fillRect(X, Y, s, s);
+      glowDecor(ctx, skin, X, Y, s, t);
       break;
     }
     case 'prism': {
@@ -371,6 +354,145 @@ function paintPattern(ctx, skin, X, Y, s, t) {
     default:
       ctx.fillStyle = c[0]; ctx.fillRect(X, Y, s, s);
   }
+}
+
+/** Signature animated motif for each legendary "glow" skin. */
+function glowDecor(ctx, skin, X, Y, s, t) {
+  const c = skin.colors;
+  const cx = X + s / 2, cy = Y + s / 2;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  switch (skin.id) {
+    case 'inferno': {
+      // flames licking up from the bottom
+      for (let k = 0; k < 5; k++) {
+        const fx = X + s * (0.1 + k * 0.2);
+        const h = s * (0.32 + 0.16 * Math.sin(t * 7 + k * 1.9));
+        const g = ctx.createLinearGradient(0, Y + s, 0, Y + s - h);
+        g.addColorStop(0, 'rgba(255,240,150,0.95)'); g.addColorStop(1, 'rgba(255,120,20,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(fx - s * 0.11, Y + s);
+        ctx.quadraticCurveTo(fx - s * 0.08 + Math.sin(t * 5 + k) * s * 0.03, Y + s - h * 0.6, fx, Y + s - h);
+        ctx.quadraticCurveTo(fx + s * 0.08, Y + s - h * 0.6, fx + s * 0.11, Y + s);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'glacier':
+    case 'crystal': {
+      // faceted ice with a travelling glint
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+      ctx.lineWidth = Math.max(1, s * 0.025);
+      ctx.beginPath();
+      const pts = [[0, 0.35], [0.3, 0.22], [0.55, 0], [0.3, 0.22], [0.42, 0.55], [0, 0.7], [0.42, 0.55], [0.75, 0.42], [1, 0.2], [0.75, 0.42], [0.68, 1], [0.42, 0.55]];
+      pts.forEach(([u, v], k) => (k ? ctx.lineTo(X + u * s, Y + v * s) : ctx.moveTo(X + u * s, Y + v * s)));
+      ctx.stroke();
+      const gx = X + (((t * 0.5) % 1.8) - 0.4) * s;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath(); ctx.moveTo(gx, Y); ctx.lineTo(gx + s * 0.12, Y); ctx.lineTo(gx - s * 0.2, Y + s); ctx.lineTo(gx - s * 0.32, Y + s); ctx.fill();
+      break;
+    }
+    case 'thunder': {
+      // a lightning bolt emblem that flashes
+      const flash = (t % 2.2) < 0.12 ? 1 : 0.55 + 0.25 * Math.sin(t * 9);
+      ctx.shadowColor = c[1]; ctx.shadowBlur = s * 0.3 * flash;
+      ctx.fillStyle = `rgba(255,243,107,${flash})`;
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.08, Y + s * 0.08);
+      ctx.lineTo(cx - s * 0.16, cy + s * 0.08);
+      ctx.lineTo(cx - s * 0.01, cy + s * 0.08);
+      ctx.lineTo(cx - s * 0.1, Y + s * 0.94);
+      ctx.lineTo(cx + s * 0.18, cy - s * 0.06);
+      ctx.lineTo(cx + s * 0.03, cy - s * 0.06);
+      ctx.closePath();
+      ctx.globalAlpha = 0.55;
+      ctx.fill();
+      break;
+    }
+    case 'midas': {
+      // embossed coin rings and drifting sparkles
+      ctx.strokeStyle = 'rgba(168,107,0,0.35)';
+      ctx.lineWidth = Math.max(1, s * 0.03);
+      for (const r of [0.42, 0.3]) { ctx.beginPath(); ctx.arc(cx, cy, s * r, 0, TAU); ctx.stroke(); }
+      for (let k = 0; k < 3; k++) {
+        const p = (t * 0.8 + k / 3) % 1;
+        ctx.fillStyle = `rgba(255,255,255,${Math.sin(p * Math.PI)})`;
+        starPath(ctx, X + s * (0.2 + k * 0.3), Y + s * (0.25 + ((k * 0.37) % 0.5)), s * 0.07 * Math.sin(p * Math.PI), t);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'venom': {
+      // toxic drips sliding down from the top
+      ctx.fillStyle = rgba(c[0], 0.9);
+      for (let k = 0; k < 4; k++) {
+        const dx = X + s * (0.15 + k * 0.23);
+        const len = s * (0.18 + 0.22 * ((Math.sin(t * 1.6 + k * 2.1) + 1) / 2));
+        ctx.beginPath();
+        ctx.moveTo(dx - s * 0.06, Y);
+        ctx.lineTo(dx - s * 0.035, Y + len);
+        ctx.arc(dx, Y + len, s * 0.035, Math.PI, 0, true);
+        ctx.lineTo(dx + s * 0.06, Y);
+        ctx.fill();
+      }
+      ctx.fillRect(X, Y, s, s * 0.06);
+      break;
+    }
+    case 'sakura': {
+      // a blossom and falling petals
+      const petal = (px, py, r, rot) => {
+        ctx.save(); ctx.translate(px, py); ctx.rotate(rot);
+        for (let k = 0; k < 5; k++) { ctx.rotate(TAU / 5); ctx.beginPath(); ctx.ellipse(0, -r * 0.55, r * 0.32, r * 0.55, 0, 0, TAU); ctx.fill(); }
+        ctx.restore();
+      };
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      petal(X + s * 0.78, Y + s * 0.22, s * 0.16, t * 0.4);
+      ctx.fillStyle = '#ff5c9a';
+      ctx.beginPath(); ctx.arc(X + s * 0.78, Y + s * 0.22, s * 0.04, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      for (let k = 0; k < 3; k++) {
+        const p = (t * 0.35 + k / 3) % 1;
+        ctx.beginPath(); ctx.ellipse(X + s * (0.15 + k * 0.25) + Math.sin(t * 2 + k) * s * 0.05, Y + p * s, s * 0.04, s * 0.025, t + k, 0, TAU); ctx.fill();
+      }
+      break;
+    }
+    case 'abyss': {
+      // swirling deep-sea vortex with twinkling stars
+      ctx.translate(cx, cy);
+      ctx.rotate(t * 0.8);
+      ctx.strokeStyle = rgba(c[1], 0.55);
+      ctx.lineWidth = Math.max(1, s * 0.035);
+      for (let k = 0; k < 3; k++) {
+        ctx.rotate(TAU / 3);
+        ctx.beginPath();
+        for (let u = 0; u <= 1; u += 0.08) {
+          const r = s * (0.04 + u * 0.45), a = u * 3;
+          if (u === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'velvet': {
+      // gold embroidery: diamond lattice with studs
+      ctx.strokeStyle = rgba(c[1], 0.7);
+      ctx.lineWidth = Math.max(1, s * 0.022);
+      const q = s / 3;
+      ctx.beginPath();
+      for (let k = -3; k <= 3; k++) {
+        ctx.moveTo(X + k * q, Y); ctx.lineTo(X + k * q + s, Y + s);
+        ctx.moveTo(X + k * q + s, Y); ctx.lineTo(X + k * q, Y + s);
+      }
+      ctx.stroke();
+      ctx.fillStyle = c[1];
+      for (let i = 0; i <= 3; i++) for (let j = 0; j <= 3; j++) { ctx.beginPath(); ctx.arc(X + i * q, Y + j * q, s * 0.025, 0, TAU); ctx.fill(); }
+      break;
+    }
+    default: break;
+  }
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------------- hats */
@@ -775,6 +897,10 @@ const SKIN_FX = {
   petal: { rate: 6, shape: 'petal', colors: ['#ffb7d5', '#ff8fbd', '#ffffff'], size: 0.13, up: -0.8 },
   star: { rate: 8, shape: 'star', colors: ['#ffffff', '#d7b4ff'], size: 0.11, up: 0.3 },
   rainbow: { rate: 12, shape: 'square', colors: ['#ff4d6d', '#ffd23f', '#3ddc84', '#3fa9f5', '#a855f7'], size: 0.1, up: 0.8 },
+  matrix: { rate: 12, shape: 'square', colors: ['#2bff6a', '#9dffb8', '#0f8f3a'], size: 0.07, up: -1.8 },
+  nova: { rate: 14, shape: 'star', colors: ['#fff6c4', '#ff9a3c', '#ff3df2'], size: 0.12, spread: 4 },
+  alien: { rate: 8, shape: 'ring', colors: ['#b8ff6a', '#7dff6a'], size: 0.1, up: 1 },
+  ghost: { rate: 6, shape: 'circle', colors: ['rgba(255,255,255,0.8)', 'rgba(200,184,255,0.8)'], size: 0.09, up: 0.6 },
 };
 
 function emitFx(ps, fx, x, y, u, dt, jitter) {

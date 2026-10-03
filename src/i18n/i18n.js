@@ -1,18 +1,12 @@
 import { STRINGS } from './strings.js';
 
-export const LANGS = [
-  { code: 'en', label: 'English' },
-  { code: 'ru', label: 'Русский' },
-];
+export const LANGS = [{ code: 'en', label: 'English' }];
 
 let lang = 'en';
 const listeners = new Set();
 const plural = {};
 
-export function detectLang() {
-  const nav = (globalThis.navigator?.languages?.[0] || globalThis.navigator?.language || 'en').toLowerCase();
-  return nav.startsWith('ru') || nav.startsWith('uk') || nav.startsWith('be') || nav.startsWith('kk') ? 'ru' : 'en';
-}
+export function detectLang() { return 'en'; }
 
 export function setLang(code) {
   lang = STRINGS[code] ? code : 'en';

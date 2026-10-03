@@ -10,11 +10,11 @@ export const GAME = {
   speed: 5.4,             // cells per second
   turnRate: 5.4,          // radians per second (turn radius ≈ 1 cell)
   startRadius: 3.2,       // radius of spawn territory, in cells
-  bigStartRadius: 4.6,    // with the "Big Start" boost
+  bigStartShare: 0.01,    // "Big Start" boost: start with 1% of the map
   trailPointStep: 0.33,   // polyline resolution of the rendered trail
   selfGrace: 3,           // own trail cells this recent never kill you
   headOnDist: 0.85,       // head to head collision distance, cells
-  speedBoostMul: 1.4,
+  speedBoostMul: 2,       // "Speed Rush" doubles the speed
   speedBoostTime: 6,      // seconds
   reviveInvuln: 2.5,      // seconds of protection after "continue"
   respawnDelay: [2.5, 6], // seconds before a dead bot is replaced

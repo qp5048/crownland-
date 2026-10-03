@@ -270,7 +270,8 @@ export class Renderer {
    * contoured with marching squares at 0.5. Straight edges land exactly on cell
    * borders, staircases become clean diagonals, and a capture "flows" in
    * instead of popping square by square. One Path2D per owner, filled in one
-   * call, so pieces never show seams; a round-join stroke softens corners.
+   * call, so pieces never show seams. No blur and no outward stroke: what you
+   * see as your land is your land.
    */
   drawTerritory(ctx, grid, t, x0, x1, y0, y1, s, offX, offY, pal) {
     const { owner, fxAt, fxPrev, w: gw, h: gh } = grid;
@@ -281,10 +282,10 @@ export class Renderer {
       const m = n * 2;
       b = this._terr = {
         ownA: new Uint8Array(m), valA: new Float32Array(m), ownB: new Uint8Array(m), valB: new Float32Array(m),
-        f: new Float32Array(m), g: new Float32Array(m), sx: new Float32Array(W * 2), sy: new Float32Array(H * 2), present: new Uint8Array(MAX_SLOTS + 1),
+        f: new Float32Array(m), sx: new Float32Array(W * 2), sy: new Float32Array(H * 2), present: new Uint8Array(MAX_SLOTS + 1),
       };
     }
-    const { ownA, valA, ownB, valB, f, g, sx, sy, present } = b;
+    const { ownA, valA, ownB, valB, f, sx, sy, present } = b;
     present.fill(0);
     for (let cy = 0; cy < H; cy++) {
       const y = gy0 + cy;
@@ -315,17 +316,7 @@ export class Renderer {
     paths.length = 0;
     for (let o = 1; o <= MAX_SLOTS; o++) {
       if (!present[o] || !pal[o]) continue;
-      for (let c = 0; c < n; c++) g[c] = (ownA[c] === o ? valA[c] : 0) + (ownB[c] === o ? valB[c] : 0);
-      // gentle 3×3 blur rounds corners; max(raw·0.62) keeps one-cell lines visible
-      for (let cy = 0; cy < H; cy++) {
-        for (let cx = 0; cx < W; cx++) {
-          const c = cy * W + cx;
-          const raw = g[c];
-          if (cx === 0 || cy === 0 || cx === W - 1 || cy === H - 1) { f[c] = raw; continue; }
-          const blur = (4 * raw + 2 * (g[c - 1] + g[c + 1] + g[c - W] + g[c + W]) + g[c - W - 1] + g[c - W + 1] + g[c + W - 1] + g[c + W + 1]) / 16;
-          f[c] = blur > raw * 0.62 ? blur : raw * 0.62;
-        }
-      }
+      for (let c = 0; c < n; c++) f[c] = (ownA[c] === o ? valA[c] : 0) + (ownB[c] === o ? valB[c] : 0);
       const path = new Path2D();
       for (let cy = 0; cy < H - 1; cy++) {
         const yT = sy[cy], yB = sy[cy + 1];
@@ -344,23 +335,26 @@ export class Renderer {
       paths.push(o, path);
     }
 
-    const depth = Math.max(2, s * 0.2);
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(1, s * 0.2);
-    // pass 1: the darker extruded side, shifted down
-    ctx.save();
-    ctx.translate(0, depth);
+    // The drawn land never extends past the owned cells: the darker "side" is a
+    // band *inside* the bottom edges (top face shifted up, clipped to the
+    // shape) instead of an extrusion hanging below it. A hairline stroke only
+    // hides anti-aliasing seams between neighbouring territories.
+    const depth = Math.max(2, s * 0.18);
+    ctx.lineJoin = 'miter';
+    ctx.lineWidth = Math.min(1.5, Math.max(1, s * 0.03));
     for (let k = 0; k < paths.length; k += 2) {
       const c = pal[paths[k]];
       ctx.fillStyle = c.landDark; ctx.strokeStyle = c.landDark;
       ctx.fill(paths[k + 1]); ctx.stroke(paths[k + 1]);
     }
-    ctx.restore();
-    // pass 2: the tops
     for (let k = 0; k < paths.length; k += 2) {
-      const c = pal[paths[k]];
-      ctx.fillStyle = c.land; ctx.strokeStyle = c.land;
-      ctx.fill(paths[k + 1]); ctx.stroke(paths[k + 1]);
+      const c = pal[paths[k]], path = paths[k + 1];
+      ctx.save();
+      ctx.clip(path);
+      ctx.translate(0, -depth);
+      ctx.fillStyle = c.land;
+      ctx.fill(path);
+      ctx.restore();
     }
   }
 

@@ -141,13 +141,12 @@ export function fmtPct(share, digits = 2) {
   return `${(share * 100).toFixed(digits)}%`;
 }
 
-export function fmtDuration(ms, t) {
+export function fmtDuration(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60);
-  const ru = t && t('common.on') === 'Вкл';
-  if (d > 0) return ru ? `${d} д ${hh} ч` : `${d}d ${hh}h`;
-  if (hh > 0) return ru ? `${hh} ч ${mm} мин` : `${hh}h ${mm}m`;
-  return ru ? `${mm} мин` : `${mm}m`;
+  if (d > 0) return `${d}d ${hh}h`;
+  if (hh > 0) return `${hh}h ${mm}m`;
+  return `${mm}m`;
 }
 
 /** h:mm:ss countdown. */

@@ -6,7 +6,7 @@ import { initSDK, GameplayTracker } from './ads/sdk.js';
 import { AdManager } from './ads/ads.js';
 import { SaveManager } from './save/save.js';
 import { localStorageBackend, memoryStorage, safe, sdkDataBackend } from './save/storage.js';
-import { applyDom, detectLang, setLang, t } from './i18n/i18n.js';
+import { applyDom, setLang, t } from './i18n/i18n.js';
 import { BOOSTS, HATS, SKINS, TRAILS } from './cosmetics/catalog.js';
 import { evaluateAchievements } from './progress/achievements.js';
 import { Renderer } from './game/renderer.js';
@@ -55,7 +55,7 @@ export class App {
     this.state = this.saveMgr.load();
     ensureSeason(this.state);
     ensureQuests(this.state);
-    setLang(this.state.settings.lang || detectLang());
+    setLang('en');
     this.setLoad(0.55);
 
     this.audio = new AudioEngine();

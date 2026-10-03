@@ -179,3 +179,21 @@ test('deferred death keeps land until finalised, revive restores the player', ()
   w.kill(p, null, 'wall');
   assert.equal(w.grid.counts[p.id], 0);
 });
+
+test('Big Start gives 1% of the map; Speed Rush doubles the speed', () => {
+  for (const size of [128, 142]) {
+    const w = new World({ size, seed: 21 });
+    const r = Math.sqrt((GAME.bigStartShare * size * size) / Math.PI);
+    const p = w.addPlayer({ name: 'B' }, { x: size / 2, y: size / 2, radius: r });
+    const share = w.grid.counts[p.id] / w.grid.n;
+    assert.ok(Math.abs(share - 0.01) < 0.001, `share ${share}`);
+  }
+  assert.equal(GAME.speedBoostMul, 2);
+  const w = new World({ size: 60, seed: 22 });
+  const a = w.addPlayer({ name: 'A', controller: script([[R, 10]]) }, { x: 10, y: 15, angle: R });
+  const b = w.addPlayer({ name: 'B', controller: script([[R, 10]]) }, { x: 10, y: 45, angle: R });
+  b.speedMul = GAME.speedBoostMul;
+  const ax0 = a.x, bx0 = b.x; // spawns snap to cell centres
+  run(w, 1);
+  assert.ok(Math.abs((b.x - bx0) / (a.x - ax0) - 2) < 0.02);
+});

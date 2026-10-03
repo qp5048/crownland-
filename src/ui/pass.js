@@ -86,7 +86,7 @@ export class PassPage {
       h('div.pass-lvl', { text: lvl.level }),
       h('div.pass-meta', {},
         h('h3', { text: t('pass.season', { n: info.season }) }),
-        h('div.sub', {}, h('span', { html: `${icon('clock')}` }), h('span', { text: t('pass.endsIn', { time: fmtDuration(info.msLeft, t) }) }),
+        h('div.sub', {}, h('span', { html: `${icon('clock')}` }), h('span', { text: t('pass.endsIn', { time: fmtDuration(info.msLeft) }) }),
           h('span', { text: s.pass.premium ? `★ ${t('pass.premiumActive')}` : '' })),
         h('div.xpbar', {}, h('i', { style: { width: `${lvl.progress * 100}%` } })),
         h('div.xptext', { text: lvl.level >= PASS_LEVELS ? t('pass.maxed') : `${t('pass.level', { n: lvl.level + 1 })} · ${lvl.into} / ${lvl.need} XP` })));
@@ -214,7 +214,7 @@ export class PassPage {
     });
     const now = new Date();
     const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    this.questsEl.replaceChildren(...rows, h('div.q-refresh', { text: t('pass.refresh', { time: fmtDuration(midnight - now, t) }) }));
+    this.questsEl.replaceChildren(...rows, h('div.q-refresh', { text: t('pass.refresh', { time: fmtDuration(midnight - now) }) }));
   }
 
   claimQuest(q, el) {

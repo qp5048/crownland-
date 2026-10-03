@@ -110,7 +110,7 @@ export function sanitize(raw) {
   s.settings.music = Math.max(0, Math.min(1, s.settings.music));
   s.settings.sfx = Math.max(0, Math.min(1, s.settings.sfx));
   if (!['high', 'low'].includes(s.settings.quality)) s.settings.quality = 'high';
-  if (!['', 'en', 'ru'].includes(s.settings.lang)) s.settings.lang = '';
+  if (!['', 'en'].includes(s.settings.lang)) s.settings.lang = '';
   s.quests.list = Array.isArray(raw?.quests?.list)
     ? raw.quests.list.filter((q) => isObj(q) && typeof q.id === 'string').map((q) => ({
       id: q.id, type: String(q.type || ''), target: Number(q.target) || 1, xp: Number(q.xp) || 0,

@@ -1,7 +1,7 @@
 import { formatTime } from '../core/math.js';
 import { DAILY_REWARDS, dailyStatus } from '../battlepass/daily.js';
 import { RANKS, rankIconSVG, rankName } from '../ranked/ranks.js';
-import { LANGS, getLang, itemName, t } from '../i18n/i18n.js';
+import { itemName, t } from '../i18n/i18n.js';
 import { getItem, getSkin } from '../cosmetics/catalog.js';
 import { ACHIEVEMENTS, achievementProgress, claimAchievement } from '../progress/achievements.js';
 import { chestStatus, doubleChest, openChest } from '../progress/chest.js';
@@ -240,7 +240,6 @@ export function settingsDialog(app) {
       }
       return el;
     };
-    const lang = seg(LANGS.map((l) => ({ value: l.code, label: l.label })), getLang(), (v) => { app.setLanguage(v); close(); setTimeout(() => settingsDialog(app), 280); });
     const gfx = seg([{ value: 'high', label: t('settings.high') }, { value: 'low', label: t('settings.low') }], s.quality, (v) => app.setQuality(v));
     return h('div', {},
       h('h2', { text: t('settings.title') }),
@@ -248,7 +247,6 @@ export function settingsDialog(app) {
         slider('music', t('settings.music'), 'music'),
         slider('sfx', t('settings.sfx'), 'sound'),
         h('div.set-row', {}, h('label', { html: `${icon('mute')}${t('settings.mute')}` }), muteToggle),
-        h('div.set-row', {}, h('label', { html: `${icon('globe')}${t('settings.language')}` }), lang),
         h('div.set-row', {}, h('label', { html: `${icon('sparkle')}${t('settings.graphics')}` }), gfx),
         h('div.set-row', {}, h('label', { html: `${icon('keyboard')}${t('settings.controls')}` })),
         h('div.set-note', { text: t('settings.controlsText') }),
