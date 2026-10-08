@@ -3,12 +3,13 @@ import { portal } from './sdk.js';
 import { save, persist, initSave } from './save.js';
 import { setLang, t } from './i18n.js';
 import { audio } from './audio.js';
-import { biomeForLevel, createSky, buildDecor } from './world.js';
+import { biomeForLevel, createSky, buildDecor, setSky, createMotes, updateMotes } from './world.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Level } from './level.js';
 import { Blade, P } from './player.js';
 import { FX } from './fx.js';
 import { UI } from './ui.js';
-import { skinById, renderThumbs } from './skins.js';
+import { skinById, renderThumbsAsync } from './skins.js';
 import { incomeMult, feverDuration, magnetRadius, shieldChance, checkAutoUnlocks, progressSkin, own } from './meta.js';
 import { TARGET_RINGS } from './textures.js';
 import { clamp, lerp, damp, segDist, isTouch, fmt, angDiff } from './util.js';
@@ -79,13 +80,15 @@ class Game {
     this.initRenderer();
     this.initScene();
     this.ui = new UI(this);
-    this.ui.thumbs = renderThumbs();
     this.blade.setSkin(skinById(save.skin));
     this.ui.setWallet();
     this.loadLevel(save.level);
     this.toMenu(false);
     this.bindInput();
 
+    // shop previews render in the background after the game is visible
+    this.ui.thumbs = { priority: (progressSkin() || {}).id };
+    setTimeout(() => renderThumbsAsync(this.ui.thumbs, () => this.ui.onThumb()), 300);
     const loading = document.getElementById('loading');
     loading.style.opacity = '0';
     setTimeout(() => loading.remove(), 450);
@@ -108,6 +111,8 @@ class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.localClippingEnabled = true;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
   }
@@ -127,6 +132,10 @@ class Game {
     scene.add(sun, sun.target);
     this.sky = createSky();
     scene.add(this.sky);
+    // soft studio reflections so metal blades, coins and fruit skins shine
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
     scene.fog = new THREE.Fog('#cdeefe', 55, 190);
     this.blade = new Blade(scene);
     this.fx = new FX(scene, this.camera, this.renderer);
@@ -225,6 +234,7 @@ class Game {
     const level = (this.level = new Level(n, biome));
     this.scene.add(level.root);
     this.decor = buildDecor(biome, -40, level.board.x + 40, level.floorY, n);
+    this.decorT = 0;
     this.scene.add(this.decor);
     this.applyBiome(biome);
 
@@ -255,8 +265,14 @@ class Game {
   }
 
   applyBiome(b) {
-    this.sky.material.uniforms.top.value.set(b.skyTop);
-    this.sky.material.uniforms.bottom.value.set(b.skyBottom);
+    setSky(this.sky, b);
+    this.scene.environmentIntensity = b.envI;
+    if (this.motes) {
+      this.scene.remove(this.motes);
+      this.motes.geometry.dispose();
+    }
+    this.motes = createMotes(b);
+    this.scene.add(this.motes);
     this.scene.fog.color.set(b.fog);
     this.hemi.color.set(b.hemiSky);
     this.hemi.groundColor.set(b.hemiGround);
@@ -381,7 +397,7 @@ class Game {
     const L = this.level;
     const inArena = L.boss && L.boss.alive && this.run.bossStarted;
     this.blade.speedMul = this.run.feverOn ? 1.12 : 1;
-    this.blade.hop({ vx: inArena ? 2.4 : P.VX });
+    this.blade.hop({ vx: inArena ? 1.9 : P.VX });
     audio.play('flip');
   }
 
@@ -442,6 +458,7 @@ class Game {
     this.updateCamera(dt);
     this.fx.updateFloats(dt);
     this.updateDecor(sdt);
+    if (this.motes) updateMotes(this.motes, this.camera.position, sdt, this.time);
 
     if (this.state === 'play') {
       this.ui.setProgress((b.x - L.startX) / (L.finish.x - L.startX));
@@ -484,7 +501,9 @@ class Game {
   updateDecor(dt) {
     const cx = this.camera.position.x;
     for (const o of this.decor.children) {
-      if (o.userData.cloud) o.position.x += o.userData.drift * dt;
+      if (o.userData.drift) o.position.x += o.userData.drift * dt;
+      if (o.userData.scroll && o.material.map) o.material.map.offset.x += o.userData.scroll * dt;
+      if (o.userData.spin) o.material.rotation += o.userData.spin * dt;
       if (o.userData.follow) {
         if (o.userData.baseX === undefined) o.userData.baseX = o.position.x;
         o.position.x = cx + o.userData.baseX;
@@ -508,14 +527,14 @@ class Game {
       oz = 2.4 + (far - 1) * 2.5;
       k = 4;
     } else {
-      const lead = far > 1.3 ? 1.2 : 2.1;
+      const lead = far > 1.3 ? 1.0 : 1.8;
       lx = b.x + lead;
       const ground = L.groundTopAt(b.x + 1.5, b.y + 1.2);
       const g = ground < L.floorY + 1 ? L.groundTopAt(b.x - 1, b.y + 1.2) : ground;
       ly = Math.max(g + 1.0, lerp(g + 1.0, b.y + 0.2, 0.55));
       if (this.state === 'dead') ly = Math.max(ly, L.killY + 2);
       const zoom = L.boss && L.boss.alive && this.run.bossStarted ? 1.12 : this.run.feverOn ? 1.06 : 1;
-      ox = -4.7 * far * zoom; oy = 2.8 * far * zoom; oz = 7.0 * far * zoom;
+      ox = -2.1 * far * zoom; oy = 3.3 * far * zoom; oz = 8.6 * far * zoom;
       k = 4;
     }
     if (snap) {
@@ -531,7 +550,7 @@ class Game {
     }
     const cam = this.camera;
     cam.position.set(this.look.x + this.camOff.x, this.look.y + this.camOff.y, this.camOff.z).add(this.fx.shakeOff);
-    cam.lookAt(this.look.x, this.look.y, -0.4);
+    cam.lookAt(this.look.x, this.look.y - (this.state === 'aim' || this.state === 'throw' || this.state === 'won' ? 0 : 0.4), -0.4);
     this.sun.position.set(this.look.x - 7, this.look.y + 16, 11);
     this.sun.target.position.set(this.look.x + 2, this.look.y - 3, 0);
     this.sky.position.copy(cam.position);
@@ -620,7 +639,7 @@ class Game {
       if (b.vy > 2) continue;
       for (const [px, py] of pts) {
         if (px > p.x0 - 0.05 && px < p.x1 + 0.05 && py > p.y - 0.1 && py < p.y + p.h + 0.08) {
-          b.hop({ vy: 17.5, vx: 6.2, turns: 2, pad: true });
+          b.hop({ vy: 14, vx: 4.6, turns: 2, pad: true });
           p.squash = 1;
           audio.play('jelly');
           this.fx.burst((p.x0 + p.x1) / 2, p.y + p.h, '#57e389', 12, { speed: 3, up: 3 });
@@ -775,7 +794,7 @@ class Game {
     L.removeItem(it);
     const [dx, dy] = b.dir();
     const cy = it.y + it.hh;
-    this.fx.slice(it.group, it.x, cy, -dy, dx, it.def.flesh, { vx: b.vx, size: it.h, low: this.lowFx });
+    this.fx.slice(it.group, it.x, cy, -dy, dx, it.def.flesh, { vx: b.vx, size: it.h, low: this.lowFx, cap: it.golden ? 'golden' : it.def.cap, capR: it.def.capR });
     const big = it.def.big || it.golden;
     this.fx.burst(it.x, cy, it.juice, big ? 26 : it.def.layer ? 6 : 14, { speed: big ? 5.5 : 4.2, size: big ? 0.1 : 0.075, up: 2 });
     if (!it.def.layer || Math.random() < 0.35) {
@@ -791,6 +810,7 @@ class Game {
     if (big) {
       audio.play('squish');
       this.fx.shake(0.08, 0.15);
+      this.timeScale = Math.min(this.timeScale, 0.35); // juicy hit-stop
     }
     if (it.golden) this.fx.burst(it.x, cy, '#ffe066', 30, { spark: true, speed: 5, life: 0.7, size: 0.1 });
     this.vib(6);
@@ -865,7 +885,7 @@ class Game {
     const B = L.boss;
     B.alive = false;
     const [dx, dy] = this.blade.dir();
-    this.fx.slice(B.group, B.x, B.y, -dy, dx, B.flesh, { speed: 3.8, size: B.r * 2, life: 2.8, up: 5 });
+    this.fx.slice(B.group, B.x, B.y, -dy, dx, B.flesh, { speed: 3.8, size: B.r * 2, life: 2.8, up: 5, cap: B.cap, capR: B.r * 1.02 });
     L.root.remove(B.group);
     this.fx.burst(B.x, B.y, B.juice, 70, { speed: 8.5, size: 0.14, life: 0.9 });
     this.fx.burst(B.x, B.y, '#ffd23f', 40, { spark: true, speed: 7, life: 0.9, size: 0.13 });
@@ -941,7 +961,7 @@ class Game {
     this.state = 'aim';
     this.aimT = 0;
     this.aimPhase = Math.random() * Math.PI * 2;
-    this.aimSpeed = 1.7 + Math.min(2.3, L.n * 0.07);
+    this.aimSpeed = 2.5 + Math.min(2.6, L.n * 0.09);
     this.aimFrom = { x: b.x, y: b.y, a: b.a };
     b.stuck = { solid: null, n: [0, 1] };
     b.flipT = 99;
@@ -958,7 +978,7 @@ class Game {
 
   aimWave(p) {
     const n = this.level.n;
-    if (n < 8) return Math.sin(p);
+    if (n < 3) return Math.sin(p);
     const w = Math.sin(p) + 0.35 * Math.sin(p * 2.3 + 1.3);
     return w / 1.35;
   }

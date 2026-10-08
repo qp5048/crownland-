@@ -3,10 +3,10 @@ import { buildBlade, disposeBlade } from './skins.js';
 import { angDiff, clamp, TAU } from './util.js';
 
 export const P = {
-  G: 32,
-  JUMP: 10.6,
-  VX: 6.1,
-  FLIP_T: 0.42,
+  G: 24,
+  JUMP: 9.0,
+  VX: 4.2,
+  FLIP_T: 0.5,
   TIP: 1.05,
   BUTT: -0.55,
   EMBED: 0.2,
@@ -24,7 +24,8 @@ const PTS = [
   { u: P.BUTT },
 ];
 
-const easeOut = (t) => 1 - Math.pow(1 - t, 2.2);
+// smooth in-out flip: the blade winds up, spins, then settles
+const easeOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 export class Blade {
   constructor(scene) {
@@ -55,7 +56,7 @@ export class Blade {
     // shield bubble
     this.bubble = new THREE.Mesh(
       new THREE.SphereGeometry(1.0, 24, 16),
-      new THREE.MeshPhongMaterial({ color: '#7ad7ff', transparent: true, opacity: 0.28, shininess: 120, specular: '#ffffff', depthWrite: false }),
+      new THREE.MeshStandardMaterial({ color: '#9fe2ff', transparent: true, opacity: 0.3, roughness: 0.05, metalness: 0.2, depthWrite: false }),
     );
     this.bubble.visible = false;
     scene.add(this.bubble);

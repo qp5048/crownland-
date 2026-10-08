@@ -199,6 +199,14 @@ export class UI {
     this.toastTimer = setTimeout(() => this.el.toast.classList.remove('show'), 1800);
   }
 
+  onThumb() {
+    clearTimeout(this.thumbT);
+    this.thumbT = setTimeout(() => {
+      if (!document.getElementById('mShop').classList.contains('hidden') && this.shopTab === 'blades') this.renderBlades();
+      this.g.refreshMenu();
+    }, 60);
+  }
+
   // ---------------------------------------------------------------------
   // Menu
   // ---------------------------------------------------------------------

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { capMaterial } from './items.js';
+
+const discGeo = new THREE.CircleGeometry(1, 40);
+const Z = new THREE.Vector3(0, 0, 1);
 
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
@@ -75,11 +79,11 @@ export class FX {
     this.halves = [];
     this.juice = new ParticleSystem(scene, 700, new THREE.MeshBasicMaterial({ color: '#ffffff' }), new THREE.IcosahedronGeometry(1, 0));
     this.spark = new ParticleSystem(scene, 400, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), new THREE.OctahedronGeometry(1, 0));
-    this.confetti = new ParticleSystem(scene, 300, new THREE.MeshLambertMaterial({ color: '#ffffff', side: THREE.DoubleSide }), new THREE.PlaneGeometry(1, 0.6));
+    this.confetti = new ParticleSystem(scene, 300, new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide }), new THREE.PlaneGeometry(1, 0.6));
     // juice splats on the ground
     const sg = new THREE.CircleGeometry(1, 14);
     sg.rotateX(-Math.PI / 2);
-    this.splatMesh = new THREE.InstancedMesh(sg, new THREE.MeshLambertMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 60);
+    this.splatMesh = new THREE.InstancedMesh(sg, new THREE.MeshStandardMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 60);
     this.splatMesh.setColorAt(0, new THREE.Color('#fff'));
     this.splatMesh.count = 0;
     this.splatMesh.frustumCulled = false;
@@ -128,6 +132,18 @@ export class FX {
           const cap = new THREE.Mesh(m.geometry, capMat);
           m.add(cap);
         }
+      }
+      // textured cut face (seeds, segments...) for round fruit
+      const cm = capMaterial(opts.cap);
+      if (cm && opts.capR) {
+        const disc = new THREE.Mesh(discGeo, cm);
+        const R = opts.capR * scl.x * 0.985;
+        disc.scale.set(R, R, 1);
+        disc.position.set(cx - nx * side * 0.004, cy - ny * side * 0.004, 0);
+        disc.quaternion.setFromUnitVectors(Z, new THREE.Vector3(-nx * side, -ny * side, 0));
+        disc.rotateZ(Math.random() * 6.28);
+        disc.updateMatrixWorld(true);
+        h.attach(disc);
       }
       const r = Math.random;
       this.halves.push({
