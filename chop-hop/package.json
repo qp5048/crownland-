@@ -1,0 +1,16 @@
+{
+  "name": "chop-hop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chop Hop — flip, slice and hop a blade through juicy worlds.",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0"
+  }
+}
